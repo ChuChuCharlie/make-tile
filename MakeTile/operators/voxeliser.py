@@ -80,15 +80,9 @@ class MT_OT_Object_Voxeliser(bpy.types.Operator):
                 obj.modifiers.clear()
                 obj.data = mesh_from_eval
 
-        ctx = {
-            'selected_objects': selected_objects,
-            'selected_editable_objects': selected_objects,
-            'object': context.active_object,
-            'active_object': context.active_object
-        }
-
         if merge is True:
-            bpy.ops.object.join(ctx)
+            with bpy.context.temp_override(selected_objects=selected_objects,selected_editable_objects=selected_objects,object=context.active_object,active_object=context.active_object):
+                bpy.ops.object.join()
 
         selected_objects = [obj for obj in context.selected_editable_objects if obj.type == 'MESH']
 
@@ -115,13 +109,8 @@ def voxelise(context, obj):
     obj.data.remesh_voxel_size = props.voxel_size
     obj.data.remesh_voxel_adaptivity = props.voxel_adaptivity
 
-    ctx = {
-        'object': obj,
-        'active_object': obj,
-        'selected_objects': [obj],
-        'selected_editable_objects': [obj]}
-
-    bpy.ops.object.voxel_remesh(ctx)
+    with bpy.context.temp_override(object=obj,active_object=obj,selected_objects=[obj],selected_editable_objects=[obj]):
+        bpy.ops.object.voxel_remesh()
     obj.mt_object_props.geometry_type = 'VOXELISED'
 
 

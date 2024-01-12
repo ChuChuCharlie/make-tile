@@ -80,20 +80,11 @@ class MT_OT_Convert_To_MT_Obj(bpy.types.Operator):
         base = spawn_empty_base(tile_props)
         base.location = obj.location
         base.rotation_euler = obj.rotation_euler
-        ctx = {
-            'selected_objects': [base, obj],
-            'active_object': base,
-            'object': base}
 
-        bpy.ops.object.parent_set(ctx, type='OBJECT', keep_transform=True)
+        with bpy.context.temp_override(selected_objects=[base, obj],active_object=base,object=base):
+            bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
 
         # UV Project
-        ctx = {
-            'selected_objects': [obj],
-            'selected_editable_objects': [obj],
-            'object': obj,
-            'active_object': obj
-        }
 
         select(obj.name)
         activate(obj.name)
@@ -128,7 +119,8 @@ class MT_OT_Convert_To_MT_Obj(bpy.types.Operator):
 
         obj.vertex_groups.active_index = group.index
         while group.index > 0:
-            bpy.ops.object.vertex_group_move(ctx, direction='UP')
+               with bpy.context.temp_override(selected_objects=[obj],selected_editable_objects=[obj],object=obj,active_object=obj):
+                    bpy.ops.object.vertex_group_move(direction='UP')
 
         # check to see if there are already vertex groups on the object.
         # If there are we assume that we want the material to be applied to each

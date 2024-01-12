@@ -3,7 +3,7 @@ import textwrap
 from random import random
 import bpy
 import addon_utils
-from bpy.types import Panel, PropertyGroup
+from bpy.types import Panel
 from bpy.props import BoolProperty, StringProperty, EnumProperty
 from bpy_extras.io_utils import ExportHelper
 from .. utils.registration import get_prefs
@@ -160,40 +160,38 @@ class MT_OT_Export_Object(bpy.types.Operator, ExportHelper):
             if fix_non_manifold:
                 make_manifold(context, dup_obj)
 
-            ctx = {
-                'object': dup_obj,
-                'active_object': dup_obj,
-                'selected_objects': [dup_obj],
-                'selected_editable_objects': [dup_obj]}
-
             # export our object
-            bpy.ops.export_mesh.stl(
-                ctx,
-                filepath=self.filepath,
-                check_existing=True,
-                filter_glob="*.stl",
-                use_selection=True,
-                global_scale=unit_multiplier,
-                use_mesh_modifiers=True)
+            with bpy.context.temp_override(
+                    object=dup_obj,
+                    active_object=dup_obj,
+                    selected_objects=[dup_obj],
+                    selected_editable_objects=[dup_obj]
+                    ):
+                bpy.ops.export_mesh.stl(
+                    filepath=self.filepath,
+                    check_existing=True,
+                    filter_glob="*.stl",
+                    use_selection=True,
+                    global_scale=unit_multiplier,
+                    use_mesh_modifiers=True)
 
             bpy.data.objects.remove(dup_obj, do_unlink=True)
 
         else:
-            ctx = {
-                'object': obj,
-                'active_object': obj,
-                'selected_objects': [obj],
-                'selected_editable_objects': [obj]}
-
             # export our object
-            bpy.ops.export_mesh.stl(
-                ctx,
-                filepath=self.filepath,
-                check_existing=True,
-                filter_glob="*.stl",
-                use_selection=True,
-                global_scale=unit_multiplier,
-                use_mesh_modifiers=True)
+            with bpy.context.temp_override(
+                    object=obj,
+                    active_object=obj,
+                    selected_objects=[obj],
+                    selected_editable_objects=[obj]
+                    ):
+                bpy.ops.export_mesh.stl(
+                    filepath=self.filepath,
+                    check_existing=True,
+                    filter_glob="*.stl",
+                    use_selection=True,
+                    global_scale=unit_multiplier,
+                    use_mesh_modifiers=True)
 
         self.report({'INFO'}, f'{obj.name} exported to {self.filepath}')
 
@@ -289,11 +287,6 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
                             set_to_preview(obj)
 
                         if obj_props.is_displacement and not obj_props.is_displaced:
-                            ctx = {
-                                'selected_objects': [obj],
-                                'selected_editable_objects': [obj],
-                                'active_object': obj,
-                                'object': obj}
 
                             for item in obj.material_slots.items():
                                 if item[0]:
@@ -327,7 +320,15 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
                             subsurf_mod = obj.modifiers[obj_props.subsurf_mod_name]
                             subsurf_mod.levels = scene_props.export_subdivs
                             subsurf_mod.show_viewport = True
-                            bpy.ops.object.modifier_move_to_index(ctx, modifier=subsurf_mod.name, index=0)
+                            with bpy.context.temp_override(
+                                    selected_objects=[obj],
+                                    selected_editable_objects=[obj],
+                                    active_object=obj,object=obj
+                                    ):
+                                bpy.ops.object.modifier_move_to_index(
+                                    modifier=subsurf_mod.name,
+                                    index=0
+                                    )
                             obj_props.is_displaced = True
 
                 depsgraph = context.evaluated_depsgraph_get()
@@ -344,12 +345,13 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
                 context.view_layer.update()
                 # join dupes together
                 if len(dupes) > 0:
-                    ctx = {
-                        'object': dupes[0],
-                        'active_object': dupes[0],
-                        'selected_objects': dupes,
-                        'selected_editable_objects': dupes}
-                    bpy.ops.object.join(ctx)
+
+                    bpy.ops.object.select_all(action='DESELECT')
+                    for obj in dupes:
+                        obj.select_set(True)
+                        bpy.context.view_layer.objects.active = dupes[0]
+                    #with bpy.context.temp_override(active_object=dupes[0],selected_objects=[dupes[0]]):
+                        bpy.ops.object.join()
 
                     if voxelise_on_export:
                         voxelise(context, dupes[0])
@@ -358,19 +360,13 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
                     if scene_props.fix_non_manifold:
                         make_manifold(context, dupes[0])
 
-                    ctx = {
-                        'object': dupes[0],
-                        'active_object': dupes[0],
-                        'selected_objects': [dupes[0]],
-                        'selected_editable_objects': [dupes[0]]}
-
                     # set origin to center
-                    bpy.ops.object.origin_set(ctx, type='ORIGIN_GEOMETRY')
-                    dupes[0].location = (0, 0, 0)
+                    with bpy.context.temp_override(object=dupes[0],active_object=dupes[0],selected_objects=[dupes[0]],selected_editable_objects=[dupes[0]]):
+                        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY')
+                        dupes[0].location = (0, 0, 0)
 
                     # export our object
                     bpy.ops.export_mesh.stl(
-                        ctx,
                         filepath=file_path,
                         check_existing=True,
                         filter_glob="*.stl",

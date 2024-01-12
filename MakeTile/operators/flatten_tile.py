@@ -33,61 +33,52 @@ class MT_OT_Flatten_Tile(bpy.types.Operator):
 
 # TODO get rid of bpy.ops.object.parent_clear
 def flatten_tile(context, collection):
-    ctx = {
-        'selected_objects': collection.all_objects,
-        'object': collection.all_objects[0],
-        'active_object': collection.all_objects[0]
-    }
 
-    # save a list of meshes
-    meshes = []
-    for obj in collection.all_objects:
-        meshes.append(obj.data)
+    with bpy.context.temp_override(selected_objects=collection.all_objects,object=collection.all_objects[0],active_object=collection.all_objects[0]):
+        # save a list of meshes
+        meshes = []
+        for obj in collection.all_objects:
+            meshes.append(obj.data)
 
-    # Unparent the objects in this collection.
-    bpy.ops.object.parent_clear(ctx, type='CLEAR_KEEP_TRANSFORM')
+        # Unparent the objects in this collection.
+        bpy.ops.object.parent_clear(type='CLEAR_KEEP_TRANSFORM')
 
-    # get all visible mesh objects
-    visible_mesh_objects = [obj for obj in collection.all_objects if obj.type == 'MESH' and obj.visible_get() is True]
+        # get all visible mesh objects
+        visible_mesh_objects = [obj for obj in collection.all_objects if obj.type == 'MESH' and obj.visible_get() is True]
 
-    # apply all modifiers
-    depsgraph = context.evaluated_depsgraph_get()
+        # apply all modifiers
+        depsgraph = context.evaluated_depsgraph_get()
 
-    for obj in visible_mesh_objects:
-        object_eval = obj.evaluated_get(depsgraph)
-        mesh_from_eval = bpy.data.meshes.new_from_object(object_eval)
-        obj.modifiers.clear()
-        obj.data = mesh_from_eval
+        for obj in visible_mesh_objects:
+            object_eval = obj.evaluated_get(depsgraph)
+            mesh_from_eval = bpy.data.meshes.new_from_object(object_eval)
+            obj.modifiers.clear()
+            obj.data = mesh_from_eval
 
-    # join all objects
-    if len(visible_mesh_objects) > 1:
-        ctx = {
-            'object': visible_mesh_objects[0],
-            'active_object': visible_mesh_objects[0],
-            'selected_objects': visible_mesh_objects,
-            'selected_editable_objects': visible_mesh_objects
-        }
-        bpy.ops.object.join(ctx)
+        # join all objects
+        if len(visible_mesh_objects) > 1:
+            with bpy.context.temp_override(object=visible_mesh_objects[0],active_object=visible_mesh_objects[0],selected_objects=visible_mesh_objects,selected_editable_objects=visible_mesh_objects):
+                bpy.ops.object.join()
 
-    # Delete all other objects in collection
-    for obj in collection.all_objects:
-        if obj not in visible_mesh_objects:
-            bpy.data.objects.remove(obj, do_unlink=True)
+        # Delete all other objects in collection
+        for obj in collection.all_objects:
+            if obj not in visible_mesh_objects:
+                bpy.data.objects.remove(obj, do_unlink=True)
 
-    # Delete all unused meshes in collection
-    for mesh in meshes:
-        if mesh is not None:
-            if mesh.users == 0:
-                bpy.data.meshes.remove(mesh)
+        # Delete all unused meshes in collection
+        for mesh in meshes:
+            if mesh is not None:
+                if mesh.users == 0:
+                    bpy.data.meshes.remove(mesh)
 
-    # Rename duplicate object to collection name
-    if len(visible_mesh_objects) > 0:
-        obj = visible_mesh_objects[0]
-        obj.name = collection.name
+        # Rename duplicate object to collection name
+        if len(visible_mesh_objects) > 0:
+            obj = visible_mesh_objects[0]
+            obj.name = collection.name
 
-        obj.mt_object_props.geometry_type = 'FLATTENED'
-        obj.mt_object_props.is_displacement = False
+            obj.mt_object_props.geometry_type = 'FLATTENED'
+            obj.mt_object_props.is_displacement = False
 
-        return obj
+            return obj
 
-    return None
+        return None

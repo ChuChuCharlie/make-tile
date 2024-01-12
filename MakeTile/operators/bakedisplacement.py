@@ -148,13 +148,9 @@ class MT_OT_Make_3D(bpy.types.Operator):
                 #subsurf_mod.levels = bpy.context.scene.mt_scene_props.subdivisions
                 subsurf_mod.show_viewport = True
 
-                ctx = {
-                    'selected_objects': [obj],
-                    'selected_editable_objects': [obj],
-                    'active_object': obj,
-                    'object': obj}
-                bpy.ops.object.modifier_move_to_index(
-                    ctx, modifier=subsurf_mod.name, index=0)
+                with context.temp_override(selected_objects=[obj],selected_editable_objects=[obj],active_object=obj,object=obj):
+                    bpy.ops.object.modifier_move_to_index(
+                       modifier=subsurf_mod.name, index=0)
 
                 # obj_props.geometry_type = 'DISPLACEMENT'
                 obj_props.is_displaced = True
@@ -255,18 +251,6 @@ def bake_displacement_map(obj):
     context.scene.render.bake_type = 'DISPLACEMENT'
     context.scene.render.bake_margin = 10
 
-    ctx = {
-        'selected_objects': [obj],
-        'selected_editable_objects': [obj],
-        'selectable_objects': [obj],
-        'active_object': obj,
-        'object': obj,
-        'visible_objects': [obj],
-        'editable_objects': [obj],
-        'objects_in_mode': [obj]
-    }
-
-
     # check to see if there is a UV layer and if not make one. Can't get context override to work.
     if len(obj.data.uv_layers) == 0:
         deselect_all()
@@ -281,7 +265,8 @@ def bake_displacement_map(obj):
         bpy.ops.object.editmode_toggle()
 
     # bake
-    bpy.ops.object.bake(ctx, type='EMIT')
+    with bpy.context.temp_override(selected_objects=[obj],selected_editable_objects=[obj],selectable_objects=[obj],active_object=obj,object=obj,visible_objects=[obj],editable_objects=[obj],objects_in_mode=[obj]):
+        bpy.ops.object.bake(type='EMIT')
 
     # pack image
     disp_image.pack()

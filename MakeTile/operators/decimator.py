@@ -58,7 +58,8 @@ class MT_OT_Object_Decimator(Operator):
         }
 
         if merge is True:
-            bpy.ops.object.join(ctx)
+            with bpy.context.temp_override(selected_objects=selected_objects,selected_editable_objects=selected_objects,object=context.active_object,active_object=context.active_object):    
+                bpy.ops.object.join()
 
         return {'FINISHED'}
 
