@@ -9,7 +9,7 @@ A series of videos on how to use MakeTile can be found on my YouTube channel her
 
 Documentation can be found at https://maketile.readthedocs.io/en/latest/
 
-Make sure you download the latest release by going to https://github.com/richeyrose/make-tile/releases and then downloading the latest MakeTile.zip file as this contains a .blend file with assets that are necessary for MakeTile to work.
+Make sure you download the latest release by going to https://github.com/ChuChuCharlie/make-tile/releases and then downloading the latest MakeTile.zip file as this contains a .blend file with assets that are necessary for MakeTile to work.
 
 MakeTile ran a succesful Kickstarter in 2020 and you can find all the updates here https://www.kickstarter.com/projects/modmodterrain/maketile-custom-dungeon-tile-creator.
 
