@@ -18,25 +18,21 @@ from . import auto_load
 
 bl_info = {
     "name": "MakeTile",
-    "author": "Richard Rose",
+    "author": "Matthew Peters",
     "description": "Add on for creating 3d printable tiles",
-    "blender": (3, 0, 1),
-    "version": (0, 0, 29),
+    "blender": (3, 2, 0),
+    "version": (0, 1, 29),
     "location": "View3D > UI > MakeTile",
     "warning": "",
     "doc_url": "https://maketile.readthedocs.io/en/latest/",
-    "tracker_url": "https://github.com/richeyrose/make-tile/issues/",
+    "tracker_url": "https://github.com/chuchucharlie/make-tile/issues/",
     "category": "Object"
 }
 
-# sys.path.append('C:/Users/riche/AppData/Local/Programs/Python/Python39/Lib/site-packages')
-
 auto_load.init()
-
 
 def register():
     auto_load.register()
-
 
 def unregister():
     auto_load.unregister()
