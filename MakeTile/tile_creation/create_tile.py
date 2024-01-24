@@ -467,6 +467,7 @@ class MT_Tile_Generator:
     base_socket_type: EnumProperty(
         items=[
             ("OPENLOCK", "OpenLOCK", ""),
+            ("OPENLOCK-NoSupport", "OpenLOCK-NoSupport", ""),
             ("LASTLOCK", "LastLOCK", "")],
         default="OPENLOCK",
         name="Base socket type",
@@ -590,6 +591,8 @@ class MT_Tile_Generator:
         """
         sockets = [
             {'socket_type': 'OPENLOCK',
+             'filename': 'openlock.blend'},
+            {'socket_type': 'OPENLOCK-NoSupport',
              'filename': 'openlock.blend'},
             {'socket_type': 'LASTLOCK',
              'filename': 'lastlock.blend'}]

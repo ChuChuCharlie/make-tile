@@ -698,12 +698,12 @@ def spawn_openlock_base(self, tile_props):
 
     # clip cutters
     clip_cutter_leg_1 = spawn_openlock_base_clip_cutter(self, tile_props)
-    clip_cutter_leg_1.name = 'Leg 1 Clip.' + tile_props.name + '.clip_cutter'
+    clip_cutter_leg_1.name = 'Leg 1 Clip.' + tile_props.tile_name + '.clip_cutter'
     clip_cutter_leg_2 = clip_cutter_leg_1.copy()
-    clip_cutter_leg_2.name = 'Leg 2 Clip.' + tile_props.name + '.clip_cutter'
+    clip_cutter_leg_2.name = 'Leg 2 Clip.' + tile_props.tile_name + '.clip_cutter'
     clip_cutter_leg_2.data = clip_cutter_leg_2.data.copy()
     clip_cutter_x_leg = clip_cutter_leg_1.copy()
-    clip_cutter_x_leg.name = 'End Wall Clip.' + tile_props.name + '.clip_cutter'
+    clip_cutter_x_leg.name = 'End Wall Clip.' + tile_props.tile_name + '.clip_cutter'
     clip_cutter_x_leg.data = clip_cutter_x_leg.data.copy()
 
     cutters = [clip_cutter_leg_1, clip_cutter_leg_2, clip_cutter_x_leg]
@@ -857,10 +857,16 @@ def spawn_openlock_base_clip_cutter(self, tile_props):
 
     # load base cutters
     with bpy.data.libraries.load(booleans_path) as (data_from, data_to):
-        data_to.objects = [
-            'openlock.wall.base.cutter.clip',
-            'openlock.wall.base.cutter.clip.cap.start',
-            'openlock.wall.base.cutter.clip.cap.end']
+        if self.base_socket_type == 'OPENLOCK':
+            data_to.objects = [
+                'openlock.wall.base.cutter.clip',
+                'openlock.wall.base.cutter.clip.cap.start',
+                'openlock.wall.base.cutter.clip.cap.end']
+        elif self.base_socket_type == 'OPENLOCK-NoSupport':
+            data_to.objects = [
+                'openlock.wall.base.cutter.clip.nosupp',
+                'openlock.wall.base.cutter.clip.cap.start',
+                'openlock.wall.base.cutter.clip.cap.end']
 
     for obj in data_to.objects:
         add_object_to_collection(obj, tile_props.tile_name)
