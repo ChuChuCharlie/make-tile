@@ -774,7 +774,10 @@ def spawn_openlock_base_clip_cutter(self, base, tile_props):
         cutter_file)
 
     with bpy.data.libraries.load(booleans_path) as (data_from, data_to):
-        data_to.objects = ['openlock.wall.base.cutter.clip_single']
+        if self.base_socket_type == 'OPENLOCK':
+            data_to.objects = ['openlock.wall.base.cutter.clip_single']
+        elif self.base_socket_type == 'OPENLOCK-NoSupport':
+           data_to.objects = ['openlock.wall.base.cutter.clip_single.nosupp']
 
     clip_cutter = data_to.objects[0]
     add_object_to_collection(clip_cutter, tile_props.tile_name)

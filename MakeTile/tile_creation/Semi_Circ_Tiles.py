@@ -515,10 +515,16 @@ def create_openlock_base_clip_cutters(self, tile_props):
 
     if radius >= 1:
         with bpy.data.libraries.load(booleans_path) as (data_from, data_to):
-            data_to.objects = [
-                'openlock.wall.base.cutter.clip.001',
-                'openlock.wall.base.cutter.clip.cap.start.001',
-                'openlock.wall.base.cutter.clip.cap.end.001']
+            if self.base_socket_type == 'OPENLOCK':
+                data_to.objects = [
+                    'openlock.wall.base.cutter.clip.001',
+                    'openlock.wall.base.cutter.clip.cap.start.001',
+                    'openlock.wall.base.cutter.clip.cap.end.001']
+            elif self.base_socket_type == 'OPENLOCK-NoSupport':
+                data_to.objects = [
+                    'openlock.wall.base.cutter.clip.001.nosupp',
+                    'openlock.wall.base.cutter.clip.cap.start.001',
+                    'openlock.wall.base.cutter.clip.cap.end.001']
         '''
         for obj in data_to.objects:
             add_object_to_collection(obj, tile_props.tile_name)
