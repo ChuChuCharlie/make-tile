@@ -636,7 +636,10 @@ def create_openlock_base_clip_cutters(self, tile_props):
 
     if tile_props.curve_type == 'POS':
         with bpy.data.libraries.load(booleans_path) as (data_from, data_to):
-            data_to.objects = ['openlock.wall.base.cutter.clip_single']
+            if self.base_socket_type == 'OPENLOCK':
+                data_to.objects = ['openlock.wall.base.cutter.clip_single']
+            elif self.base_socket_type == 'OPENLOCK-NoSupport':
+                data_to.objects = ['openlock.wall.base.cutter.clip_single.nosupp']
         cutter = data_to.objects[0]
 
         clip_cutter_3 = bpy.data.objects.new(
