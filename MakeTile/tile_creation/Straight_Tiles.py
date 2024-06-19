@@ -970,6 +970,7 @@ def spawn_openlock_base_clip_cutters(self, base, tile_props):
                 return clip_cutters
 
             y_neg_clip_cutter.name = 'Y Neg Clip.' + base.name
+            add_object_to_collection(y_neg_clip_cutter, tile_props.tile_name)
             # get location of bottom front left corner of tile
             y_neg_clip_cutter.location = (
                 front_left[0] + 0.5,
