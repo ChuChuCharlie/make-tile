@@ -74,7 +74,11 @@ def update_view_mode(self, context):
 
     if context.scene.mt_view_mode == 'EEVEE':
         v3d.shading.type = 'RENDERED'
-        context.scene.render.engine = 'BLENDER_EEVEE'
+        #Get Blender version - if < 4.2 use normal EEVEE, else use EEVEE_NEXT
+        if (4, 2, 0) < bpy.app.version:
+            context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
+        else:
+            context.scene.render.engine = 'BLENDER_EEVEE'
         context.space_data.shading.use_scene_world_render = False
         context.space_data.shading.studio_light = 'city.exr'
         # if we're in Eevee mode we don't want our preview objects to be

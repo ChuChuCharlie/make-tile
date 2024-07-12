@@ -366,13 +366,23 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
                         dupes[0].location = (0, 0, 0)
 
                     # export our object
-                    bpy.ops.export_mesh.stl(
-                        filepath=file_path,
-                        check_existing=True,
-                        filter_glob="*.stl",
-                        use_selection=True,
-                        global_scale=unit_multiplier,
-                        use_mesh_modifiers=True)
+                    if (4, 1, 0) < bpy.app.version:
+                        #Use the newer, faster bpy.ops.wm.stl_export function 
+                        bpy.ops.wm.stl_export(
+                            filepath=file_path,
+                            check_existing=True,
+                            filter_glob="*.stl",
+                            export_selected_objects=True,
+                            global_scale=unit_multiplier,
+                            apply_modifiers=True)
+                    else:
+                        bpy.ops.export_mesh.stl(
+                            filepath=file_path,
+                            check_existing=True,
+                            filter_glob="*.stl",
+                            use_selection=True,
+                            global_scale=unit_multiplier,
+                            use_mesh_modifiers=True)
 
                     objects.remove(dupes[0], do_unlink=True)
 
