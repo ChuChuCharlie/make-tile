@@ -1,7 +1,7 @@
 # MakeTile
 A 3D printable dungeon tile creator addon for Blender 3.2+
 
-This is an update that provides compatibility with Blender 3.2 and 4. There are no new features. The code changes make it incompatible with older versions of Blender, you will need the original MakeTile, that this is a fork of, by richyrose (https://github.com/richeyrose/make-tile). Any updates to the source I will try and reflect in this version.
+This is an update that provides compatibility with Blender from version 3.2 and above. There are no new features. The code changes make it incompatible with older versions of Blender, you will need the original MakeTile, that this is a fork of, by richyrose (https://github.com/richeyrose/make-tile). Any updates to the source I will try and reflect in this version.
 
 **Installation**
 
