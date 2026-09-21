@@ -9,3 +9,7 @@ __pycache__
 .pytest_cache
 /__pycache__
 MakeTile/.vscode/settings.json
+.agents
+.claude
+plans
+CLAUDE.md

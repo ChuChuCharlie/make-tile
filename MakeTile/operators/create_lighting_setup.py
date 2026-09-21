@@ -31,7 +31,7 @@ class MT_OT_Create_Lighting_Setup(bpy.types.Operator):
         bpy.types.Scene.mt_view_mode = bpy.props.EnumProperty(
             items=view_mode,
             name="Render Engine",
-            default="CYCLES",
+            default="EEVEE",
             update=update_view_mode,
         )
 
@@ -56,7 +56,10 @@ def update_view_mode(self, context):
         context.scene.render.engine = 'CYCLES'
         context.space_data.shading.use_scene_world_render = False
         context.space_data.shading.studio_light = 'city.exr'
-        context.scene.cycles.feature_set = 'EXPERIMENTAL'
+        # feature_set was removed in Blender 5.0; adaptive subdivision is now
+        # built into the Subdivision Surface modifier.
+        if hasattr(context.scene.cycles, 'feature_set'):
+            context.scene.cycles.feature_set = 'EXPERIMENTAL'
 
         if context.scene.mt_use_gpu is True:
             context.scene.cycles.device = 'GPU'
@@ -74,8 +77,9 @@ def update_view_mode(self, context):
 
     if context.scene.mt_view_mode == 'EEVEE':
         v3d.shading.type = 'RENDERED'
-        #Get Blender version - if < 4.2 use normal EEVEE, else use EEVEE_NEXT
-        if (4, 2, 0) < bpy.app.version:
+        # Blender 4.2 uses the BLENDER_EEVEE_NEXT engine identifier; all other
+        # supported versions use BLENDER_EEVEE.
+        if bpy.app.version[:2] == (4, 2):
             context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
         else:
             context.scene.render.engine = 'BLENDER_EEVEE'

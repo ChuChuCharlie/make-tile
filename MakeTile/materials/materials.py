@@ -90,10 +90,11 @@ def get_vert_group_material(vert_group, obj):
 
 def add_preview_mesh_subsurf(obj):
     '''Adds an adaptive subdivison modifier'''
+    from ..tile_creation.create_tile import enable_adaptive_subdivision
     obj_subsurf = obj.modifiers.new('Subsurf', 'SUBSURF')
     obj_subsurf.subdivision_type = 'SIMPLE'
     obj_subsurf.levels = 0
-    obj.cycles.use_adaptive_subdivision = True
+    enable_adaptive_subdivision(obj, obj_subsurf)
     bpy.context.scene.cycles.preview_dicing_rate = 1
 
 

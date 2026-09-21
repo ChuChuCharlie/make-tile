@@ -22,6 +22,11 @@ class MT_PT_Tile_Generator_Panel(Panel):
 
     def draw(self, context):
         scene = context.scene
+        if not hasattr(scene, 'mt_scene_props'):
+            self.layout.label(text="MakeTile is not initialized.")
+            self.layout.label(text="Try reloading the add-on.")
+            return
+
         scene_props = scene.mt_scene_props
 
         obj = context.active_object
