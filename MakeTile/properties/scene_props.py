@@ -103,21 +103,105 @@ def reset_part_defaults(self, context):
             # Some tiles like mini bases don;t have main parts
             except KeyError:
                 pass
+            break
 
-def update_scene_defaults(self, context):
-    tile_type = self.tile_type
+
+def _apply_tile_type_defaults():
+    """Apply defaults for the current tile_type and redraw the UI.
+
+    This is run as a deferred timer callback so that the EnumProperty dropdown
+    UI can finish updating before we touch dependent properties such as
+    ``base_blueprint`` and ``main_part_blueprint``.
+    """
+    context = bpy.context
+    scene = context.scene
+    if not hasattr(scene, 'mt_scene_props'):
+        return None
+
+    scene_props = scene.mt_scene_props
+    tile_type = scene_props.tile_type
     tile_defaults = load_tile_defaults(context)
+    tile_def = None
     for tile in tile_defaults:
         if tile['type'] == tile_type:
-            defaults = tile['defaults']
-            for key, value in defaults.items():
-                if hasattr(self, key):
-                    try:
-                        setattr(self, key, value)
-                    except TypeError:
-                        pass
+            tile_def = tile
             break
-    reset_part_defaults(self, context)
+
+    if tile_def is None:
+        print(
+            f"MakeTile warning: no defaults found for tile type {tile_type}")
+        return None
+
+    defaults = tile_def['defaults']
+    valid_base_blueprints = set(tile_def.get('base_blueprints', {}).keys())
+    valid_main_part_blueprints = set(
+        tile_def.get('main_part_blueprints', {}).keys())
+
+    new_base_blueprint = defaults.get('base_blueprint')
+    if new_base_blueprint not in valid_base_blueprints and valid_base_blueprints:
+        new_base_blueprint = next(iter(sorted(valid_base_blueprints)))
+
+    new_main_part_blueprint = defaults.get('main_part_blueprint')
+    if new_main_part_blueprint not in valid_main_part_blueprints and valid_main_part_blueprints:
+        new_main_part_blueprint = next(iter(sorted(valid_main_part_blueprints)))
+
+    if new_base_blueprint is not None and hasattr(scene_props, 'base_blueprint'):
+        setattr(scene_props, 'base_blueprint', new_base_blueprint)
+    if new_main_part_blueprint is not None and hasattr(scene_props, 'main_part_blueprint'):
+        setattr(scene_props, 'main_part_blueprint', new_main_part_blueprint)
+
+    for key, value in defaults.items():
+        if key in ('base_blueprint', 'main_part_blueprint'):
+            continue
+        if hasattr(scene_props, key):
+            try:
+                setattr(scene_props, key, value)
+            except TypeError:
+                pass
+
+    reset_part_defaults(scene_props, context)
+
+    # Force a full UI redraw so panels update on the first dropdown click.
+    try:
+        for window in context.window_manager.windows:
+            for area in window.screen.areas:
+                area.tag_redraw()
+    except Exception:
+        pass
+
+    # Clear the deferral flag so future tile_type changes queue a new timer.
+    if '_mt_deferring_tile_type_update' in scene_props:
+        del scene_props['_mt_deferring_tile_type_update']
+
+    return None
+
+
+def update_scene_defaults(self, context):
+    """Update scene properties when the tile type changes.
+
+    Instead of applying defaults immediately inside the EnumProperty update
+    callback, we register a one-shot timer. This lets Blender finish updating
+    the dropdown UI first, which fixes the issue where the first selection
+    appeared not to apply until a second click.
+    """
+    if self.get('_mt_deferring_tile_type_update', False):
+        return
+
+    self['_mt_deferring_tile_type_update'] = True
+    try:
+        bpy.app.timers.register(
+            _apply_tile_type_defaults,
+            first_interval=0.01,
+            persistent=False)
+    except Exception as err:
+        print(f"MakeTile warning: failed to defer tile type update: {err}")
+        # Fall back to immediate application if the timer cannot be registered.
+        _apply_tile_type_defaults()
+    finally:
+        # The flag is cleared by the timer; leave it set here so repeated
+        # rapid changes don't queue multiple timers.
+        pass
+
 
 def create_scene_props():
     """Dynamically create MT_Scene_Props property group.
@@ -257,7 +341,16 @@ def create_scene_props():
     setattr(bpy.types.Scene, "mt_scene_props", PointerSceneProps)
 
 def register():
-    create_scene_props()
+    try:
+        create_scene_props()
+    except Exception as err:
+        print(f"MakeTile error: failed to create scene properties: {err}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 def unregister():
-    del bpy.types.Scene.mt_scene_props
+    try:
+        del bpy.types.Scene.mt_scene_props
+    except AttributeError:
+        pass

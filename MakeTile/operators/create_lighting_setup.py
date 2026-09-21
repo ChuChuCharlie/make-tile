@@ -56,7 +56,10 @@ def update_view_mode(self, context):
         context.scene.render.engine = 'CYCLES'
         context.space_data.shading.use_scene_world_render = False
         context.space_data.shading.studio_light = 'city.exr'
-        context.scene.cycles.feature_set = 'EXPERIMENTAL'
+        # feature_set was removed in Blender 5.0; adaptive subdivision is now
+        # built into the Subdivision Surface modifier.
+        if hasattr(context.scene.cycles, 'feature_set'):
+            context.scene.cycles.feature_set = 'EXPERIMENTAL'
 
         if context.scene.mt_use_gpu is True:
             context.scene.cycles.device = 'GPU'

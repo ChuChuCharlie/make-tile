@@ -56,18 +56,17 @@ def tile_z_update(self, context):
 
 
 def create_tile_type_enums(self, context):
-    """Create an enum of tile types out of subclasses of MT_OT_Make_Tile."""
-    enum_items = []
-    if context is None:
-        return enum_items
+    """Create an enum of tile types out of subclasses of MT_OT_Make_Tile.
 
-    # blueprint = context.scene.mt_scene_props.tile_blueprint
+    Returns the list of available tile types even when ``context`` is ``None``
+    so that ``EnumProperty`` defaults can be resolved at registration time.
+    """
+    enum_items = []
     subclasses = get_all_subclasses(MT_Tile_Generator)
 
     for subclass in subclasses:
-        # if hasattr(subclass, 'mt_blueprint'):
-        if 'INTERNAL' not in subclass.bl_options:
-            enum = (subclass.mt_type, subclass.bl_label, "")
+        if 'INTERNAL' not in subclass.bl_options and hasattr(subclass, 'mt_type'):
+            enum = (subclass.mt_type, getattr(subclass, 'bl_label', subclass.mt_type), "")
             enum_items.append(enum)
     return sorted(enum_items)
 
@@ -87,6 +86,9 @@ def create_main_part_blueprint_enums(self, context):
         return enum_items
 
     scene = context.scene
+    if not hasattr(scene, 'mt_scene_props'):
+        return enum_items
+
     scene_props = scene.mt_scene_props
 
     tile_type = scene_props.tile_type
@@ -111,6 +113,9 @@ def create_base_blueprint_enums(self, context):
         return enum_items
 
     scene = context.scene
+    if not hasattr(scene, 'mt_scene_props'):
+        return enum_items
+
     scene_props = scene.mt_scene_props
 
     tile_type = scene_props.tile_type
@@ -178,15 +183,15 @@ def reset_part_defaults(self, context):
             break
 
 
-# TODO: Work out why this is called twice by operator
 def update_part_defaults(self, context):
-    if hasattr(self, 'is_scene_props'):
+    """Update part defaults when base/main_part blueprint changes.
+
+    This is the update callback for the blueprint EnumProperties on both
+    ``MT_Tile_Generator`` operators and ``MT_Scene_Props``. It delegates to
+    ``reset_part_defaults`` whenever the user changes a blueprint directly.
+    """
+    if hasattr(self, 'is_scene_props') or getattr(self, 'executed', False):
         reset_part_defaults(self, context)
-        return
-    else:
-        if self.executed:
-            reset_part_defaults(self, context)
-            return
 
 
 def create_material_enums(self, context):
@@ -198,12 +203,12 @@ def create_material_enums(self, context):
     Returns:
         list[EnumPropertyItem]: enum items
     """
-    prefs = get_prefs()
     enum_items = []
 
     if context is None:
         return enum_items
 
+    prefs = get_prefs()
     mats = prefs.default_materials
 
     for mat in mats:
@@ -222,13 +227,15 @@ def create_wall_position_enums(self, context):
     Returns:
         list[EnumPropertyItem]: enum items
     """
-    prefs = get_prefs()
     enum_items = []
 
     if context is None:
         return enum_items
 
     scene = context.scene
+    if not hasattr(scene, 'mt_scene_props'):
+        return enum_items
+
     scene_props = scene.mt_scene_props
 
     tile_type = scene_props.tile_type
@@ -266,21 +273,6 @@ class MT_OT_Reset_Tile_Defaults(Operator):
 
 class MT_Tile_Generator:
     """Subclass this to create your tile operator."""
-
-    def create_tile_type_enums(self, context):
-        """Create an enum of tile types out of subclasses of MT_OT_Make_Tile."""
-        enum_items = []
-        if context is None:
-            return enum_items
-        # blueprint = context.scene.mt_scene_props.tile_blueprint
-        subclasses = get_all_subclasses(MT_Tile_Generator)
-
-        for subclass in subclasses:
-            # if hasattr(subclass, 'mt_blueprint'):
-            if 'INTERNAL' not in subclass.bl_options:
-                enum = (subclass.mt_type, subclass.bl_label, "")
-                enum_items.append(enum)
-        return sorted(enum_items)
 
     invoked: BoolProperty(
         name="Invoked",
@@ -815,6 +807,27 @@ def lock_all_transforms(obj):
     obj.lock_scale[2] = True
 
 
+def enable_adaptive_subdivision(obj, subsurf_mod=None):
+    """Enable adaptive subdivision in a Blender 4/5 compatible way.
+
+    Blender 5.0 moved the adaptive-subdivision toggle from
+    ``obj.cycles.use_adaptive_subdivision`` to the Subdivision Surface
+    modifier. This helper enables it on whichever location is available.
+
+    Args:
+        obj (bpy.types.Object): Object that owns the subsurf modifier.
+        subsurf_mod (bpy.types.SubsurfModifier, optional): Subsurf modifier to
+            enable adaptive subdivision on. If the modifier supports the
+            property it is preferred over the legacy Cycles object setting.
+    """
+    if subsurf_mod is not None and hasattr(subsurf_mod, 'use_adaptive_subdivision'):
+        subsurf_mod.use_adaptive_subdivision = True
+        return
+
+    if hasattr(obj.cycles, 'use_adaptive_subdivision'):
+        obj.cycles.use_adaptive_subdivision = True
+
+
 def add_subsurf_modifier(obj):
     """Add a subsurf modifier for material system and store its name in object props.
 
@@ -827,7 +840,7 @@ def add_subsurf_modifier(obj):
     subsurf = obj.modifiers.new('MT Subsurf', 'SUBSURF')
     subsurf.subdivision_type = 'SIMPLE'
     obj.mt_object_props.subsurf_mod_name = subsurf.name
-    obj.cycles.use_adaptive_subdivision = True
+    enable_adaptive_subdivision(obj, subsurf)
 
     return subsurf.name
 
@@ -1012,6 +1025,40 @@ def set_bool_obj_props(bool_obj, parent_obj, tile_props, bool_type):
     bool_obj.mt_object_props.tile_name = tile_props.tile_name
 
 
+def resolve_boolean_solver(requested='FAST'):
+    """Return a boolean solver identifier valid in the current Blender version.
+
+    Blender 5.0 renamed the 'FAST' identifier to 'FLOAT'. 'EXACT' and
+    'MANIFOLD' are unchanged, so only 'FAST'/'FLOAT' needs a runtime mapping.
+
+    Args:
+        requested (str): Preferred solver identifier (e.g. 'FAST', 'EXACT').
+
+    Returns:
+        str: A solver identifier accepted by bpy.types.BooleanModifier.solver.
+    """
+    try:
+        items = bpy.types.BooleanModifier.bl_rna.properties['solver'].enum_items
+        identifiers = {item.identifier for item in items}
+    except (AttributeError, KeyError):
+        identifiers = set()
+
+    if requested in identifiers:
+        return requested
+
+    # Cross-version mapping for the renamed fast/Float solver.
+    mapped = {'FAST': 'FLOAT', 'FLOAT': 'FAST'}.get(requested)
+    if mapped and mapped in identifiers:
+        return mapped
+
+    # Safe fallback order.
+    for choice in ('EXACT', 'FLOAT', 'FAST', 'MANIFOLD'):
+        if choice in identifiers:
+            return choice
+
+    return 'EXACT'
+
+
 def set_bool_props(bool_obj, target_obj, bool_type, solver='FAST'):
     """Set Properties for boolean and add bool to target_object's cutters collection.
 
@@ -1021,10 +1068,12 @@ def set_bool_props(bool_obj, target_obj, bool_type, solver='FAST'):
         bool_obj (bpy.types.Object): boolean object
         target_obj (bpy.types.Object): target object
         bool_type (enum): enum in {'DIFFERENCE', 'UNION', 'INTERSECT'}
-        solver (enum in {'FAST', 'EXACT'}): Whether to use new exact solver
+        solver (str): Preferred solver identifier. Resolved at runtime for
+            cross-version compatibility (Blender 4.x uses 'FAST', Blender 5.x
+            uses 'FLOAT').
     """
     boolean = target_obj.modifiers.new(bool_obj.name + '.bool', 'BOOLEAN')
-    boolean.solver = solver
+    boolean.solver = resolve_boolean_solver(solver)
     boolean.operation = bool_type
     boolean.object = bool_obj
     boolean.show_render = True

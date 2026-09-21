@@ -10,6 +10,58 @@ from .. lib.utils.vertex_groups import (
 from .. utils.registration import get_prefs
 from ..lib.utils.selection import deselect_all, select, activate
 
+
+def get_bake_setting(scene, attr):
+    """Read a bake property, handling Blender 5's move to BakeSettings.
+
+    Blender 5.0 moved bake properties from ``scene.render.*`` to
+    ``scene.render.bake.*``. This helper reads from the new path when it
+    exists, otherwise falls back to the old path.
+
+    Args:
+        scene (bpy.types.Scene): Scene whose bake settings are being read.
+        attr (str): Attribute name, e.g. ``'type'`` or ``'margin'``.
+
+    Returns:
+        any: The current value of the requested bake setting.
+    """
+    bake = getattr(scene.render, 'bake', None)
+    if bake is not None and hasattr(bake, attr):
+        return getattr(bake, attr)
+
+    # Map new BakeSettings names to the old RenderSettings names.
+    old_attr = {'type': 'bake_type', 'margin': 'bake_margin'}.get(attr, attr)
+    if hasattr(scene.render, old_attr):
+        return getattr(scene.render, old_attr)
+    return None
+
+
+def set_bake_setting(scene, attr, value):
+    """Set a bake property, handling Blender 5's move to BakeSettings.
+
+    Args:
+        scene (bpy.types.Scene): Scene whose bake settings are being modified.
+        attr (str): Attribute name, e.g. ``'type'`` or ``'margin'``.
+        value (any): Value to assign.
+    """
+    bake = getattr(scene.render, 'bake', None)
+    if bake is not None and hasattr(bake, attr):
+        # Blender 5's BakeSettings.type only accepts NORMALS/DISPLACEMENT/
+        # VECTOR_DISPLACEMENT; skip values like EMIT that belong on the operator.
+        try:
+            valid = {item.identifier for item in bake.bl_rna.properties[attr].enum_items}
+        except (AttributeError, KeyError):
+            valid = None
+        if valid is None or value in valid:
+            setattr(bake, attr, value)
+            return
+
+    # Map new BakeSettings names to the old RenderSettings names.
+    old_attr = {'type': 'bake_type', 'margin': 'bake_margin'}.get(attr, attr)
+    if hasattr(scene.render, old_attr):
+        setattr(scene.render, old_attr, value)
+
+
 class MT_OT_Assign_Material_To_Vert_Group(bpy.types.Operator):
     """Assigns the active material to the selected vertex group"""
     bl_idname = "object.mt_assign_mat_to_active_vert_group"
@@ -169,16 +221,24 @@ def set_cycles_to_bake_mode():
         'orig_samples': context.scene.cycles.samples,
         'orig_x': context.scene.render.resolution_x,
         'orig_y': context.scene.render.resolution_y,
-        'orig_bake_type': context.scene.cycles.bake_type,
+        'orig_bake_type': get_bake_setting(context.scene, 'type'),
         'use_selected_to_active': context.scene.render.bake.use_selected_to_active
     }
+
+    # In Blender 4.x the Cycles bake pass type was a scene property. In
+    # Blender 5 it only exists as an operator argument, so save/restore it
+    # separately when available.
+    if hasattr(context.scene.cycles, 'bake_type'):
+        cycles_settings['orig_cycles_bake_type'] = context.scene.cycles.bake_type
 
     # switch to Cycles and set up rendering settings for baking
     context.scene.render.engine = 'CYCLES'
     context.scene.cycles.samples = 1
     context.scene.render.resolution_x = resolution
     context.scene.render.resolution_y = resolution
-    context.scene.cycles.bake_type = 'EMIT'
+    # The emission bake type is passed directly to bpy.ops.object.bake().
+    # Do not set it on scene.render.bake.type (Blender 5) or
+    # scene.cycles.bake_type because those enums do not include EMIT.
     context.scene.render.bake.use_selected_to_active = False
 
     return cycles_settings
@@ -189,7 +249,9 @@ def reset_renderer_from_bake(orig_settings):
     context.scene.cycles.samples = orig_settings['orig_samples']
     context.scene.render.resolution_x = orig_settings['orig_x']
     context.scene.render.resolution_y = orig_settings['orig_y']
-    context.scene.cycles.bake_type = orig_settings['orig_bake_type']
+    set_bake_setting(context.scene, 'type', orig_settings['orig_bake_type'])
+    if 'orig_cycles_bake_type' in orig_settings:
+        context.scene.cycles.bake_type = orig_settings['orig_cycles_bake_type']
     context.scene.render.bake.use_selected_to_active = orig_settings['use_selected_to_active']
     context.scene.render.engine = orig_settings['orig_engine']
 
@@ -218,6 +280,10 @@ def bake_displacement_map(obj):
     )
     disp_image.file_format = 'PNG'
 
+    # Ensure Cycles bakes into the image texture node.
+    if hasattr(context.scene.render.bake, 'target'):
+        context.scene.render.bake.target = 'IMAGE_TEXTURES'
+
     disp_materials = []
     mat_set = set()
     for item in obj.material_slots.items():
@@ -244,12 +310,14 @@ def bake_displacement_map(obj):
                 # save displacement strength
                 strength_node = tree.nodes['Strength']
 
-                # assign image to image node
+                # assign image to image node and make it the active bake target
                 texture_node = tree.nodes['disp_texture_node']
                 texture_node.image = disp_image
+                texture_node.select = True
+                tree.nodes.active = texture_node
 
-    context.scene.render.bake_type = 'DISPLACEMENT'
-    context.scene.render.bake_margin = 10
+    set_bake_setting(context.scene, 'type', 'DISPLACEMENT')
+    set_bake_setting(context.scene, 'margin', 10)
 
     # check to see if there is a UV layer and if not make one. Can't get context override to work.
     if len(obj.data.uv_layers) == 0:
@@ -265,8 +333,15 @@ def bake_displacement_map(obj):
         bpy.ops.object.editmode_toggle()
 
     # bake
+    # Blender 5 requires the target image node to be active and selected.
+    # use_clear=True prevents leftover blank pixels from a previous bake.
+    bake_kwargs = {'type': 'EMIT'}
+    if hasattr(context.scene.render.bake, 'target'):
+        bake_kwargs['target'] = 'IMAGE_TEXTURES'
+        bake_kwargs['use_clear'] = True
+
     with bpy.context.temp_override(selected_objects=[obj],selected_editable_objects=[obj],selectable_objects=[obj],active_object=obj,object=obj,visible_objects=[obj],editable_objects=[obj],objects_in_mode=[obj]):
-        bpy.ops.object.bake(type='EMIT')
+        bpy.ops.object.bake(**bake_kwargs)
 
     # pack image
     disp_image.pack()
