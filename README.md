@@ -1,13 +1,17 @@
 # MakeTile
-A 3D printable dungeon tile creator addon for Blender 3.2+
+A 3D printable dungeon tile creator addon for Blender 4.2+
 
-This is an update that provides compatibility with Blender from version 3.2 and above. There are no new features. The code changes make it incompatible with older versions of Blender, you will need the original MakeTile, that this is a fork of, by richyrose (https://github.com/richeyrose/make-tile). Any updates to the source I will try and reflect in this version.
+This is an update that provides compatibility with Blender from version 4.2 and above. There are some new features, such as having the option to have pre-generated supports or not. The code changes make it incompatible with older versions of Blender, if you are still using them you will need the original MakeTile and Blender 3.01 by richyrose (https://github.com/richeyrose/make-tile). Any updates to the source I will try and reflect in this version.
 
 **Installation**
 
 Download the latest .zip from https://github.com/ChuChuCharlie/make-tile/releases, this contains additonal .blend files for assets used. In Blender go to Edit->Preferences the Add-ons and Install.
 
 Once loaded, expand the newly added Add-on and click Restore Default Materials. This is necessary for the materials to be loaded. Restart Blender for good measure. Refer to the original documentation for usage.
+
+**Known limitations**
+
+- In Blender 4.2+ (EEVEE Next), displaced tile faces may show gaps at their edges in Material Preview or Rendered viewport modes. This is a documented EEVEE Next limitation when displacing flat-shaded geometry. Cycles and exported tiles are not affected. See [Blender issue #124831](https://projects.blender.org/blender/blender/issues/124831) and the [EEVEE limitations documentation](https://docs.blender.org/manual/en/dev/render/eevee/limitations/limitations.html#shader-nodes).
 
 **Original readme**
 

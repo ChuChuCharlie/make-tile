@@ -77,9 +77,10 @@ def update_view_mode(self, context):
 
     if context.scene.mt_view_mode == 'EEVEE':
         v3d.shading.type = 'RENDERED'
-        # Blender 4.2 uses the BLENDER_EEVEE_NEXT engine identifier; all other
-        # supported versions use BLENDER_EEVEE.
-        if bpy.app.version[:2] == (4, 2):
+        # Blender 4.2+ introduced BLENDER_EEVEE_NEXT; Blender 5.0 reverted to
+        # BLENDER_EEVEE. Pick whichever engine identifier is available.
+        engines = context.scene.render.bl_rna.properties['engine'].enum_items.keys()
+        if 'BLENDER_EEVEE_NEXT' in engines:
             context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
         else:
             context.scene.render.engine = 'BLENDER_EEVEE'
