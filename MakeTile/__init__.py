@@ -20,7 +20,7 @@ bl_info = {
     "name": "MakeTile",
     "author": "Matthew Peters",
     "description": "Add on for creating 3d printable tiles",
-    "blender": (3, 2, 0),
+    "blender": (4, 2, 0),
     "version": (0, 1, 33),
     "location": "View3D > UI > MakeTile",
     "warning": "",
