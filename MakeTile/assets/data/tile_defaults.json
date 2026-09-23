@@ -707,7 +707,7 @@
             "NONE": "None"
         },
         "defaults": {
-            "base_blueprint": "NONE",
+            "base_blueprint": "OPENLOCK",
             "main_part_blueprint": "OPENLOCK",
             "column_type": "I",
             "subdivision_density": "MEDIUM",
