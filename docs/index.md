@@ -159,7 +159,7 @@ The material should now display correctly. You can also change the material mapp
 ## Exporting
 MakeTile treats 1 Blender unit (one grid square) as 1 inch or cm because of how the tile generators work. Because this is a different default scale to other 3D programs you need to rescale objects on export for them to print at the correct size. Because of this you shouldn't use **File** > **Export** > **STL** but instead use MakeTile's built in exporter which will rescale your tiles and more besides. You can choose which units your exported tiles will be in using the **Units** drop down menu. By default this is inches, which is what the OpenLOCK system uses.
 
-**Export Tile** will export all tiles you have selected. **Export Active Object** will only export the last object you have selected.
+**Export Tile** will export all tiles you have selected.
 
 **Export Subdivisions** is the number of times the tile will be subdivided after being made 3D.
 
