@@ -3,7 +3,7 @@
 *.blend[0-9]
 *.pyc
 *.prof
-.vscode/settings.json
+.vscode
 *.zip
 __pycache__
 .pytest_cache
@@ -13,4 +13,7 @@ MakeTile/.vscode/settings.json
 .claude
 plans
 .sofa
+.venv
 CLAUDE.md
+MakeTile\.vscode
+MakeTile\.VSCodeCounter
