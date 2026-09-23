@@ -461,7 +461,7 @@ class MT_Tile_Generator:
             ("OPENLOCK", "OpenLOCK", ""),
             ("OPENLOCK-NoSupport", "OpenLOCK-NoSupport", ""),
             ("LASTLOCK", "LastLOCK", "")],
-        default="OPENLOCK",
+        default="OPENLOCK-NoSupport",
         name="Base socket type",
         description="What type of base socket to use."
     )

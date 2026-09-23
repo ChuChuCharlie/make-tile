@@ -31,7 +31,7 @@ class MT_OT_Create_Lighting_Setup(bpy.types.Operator):
         bpy.types.Scene.mt_view_mode = bpy.props.EnumProperty(
             items=view_mode,
             name="Render Engine",
-            default="CYCLES",
+            default="EEVEE",
             update=update_view_mode,
         )
 
@@ -77,8 +77,10 @@ def update_view_mode(self, context):
 
     if context.scene.mt_view_mode == 'EEVEE':
         v3d.shading.type = 'RENDERED'
-        #Get Blender version - if < 4.2 use normal EEVEE, else use EEVEE_NEXT
-        if (4, 2, 0) < bpy.app.version:
+        # Blender 4.2+ introduced BLENDER_EEVEE_NEXT; Blender 5.0 reverted to
+        # BLENDER_EEVEE. Pick whichever engine identifier is available.
+        engines = context.scene.render.bl_rna.properties['engine'].enum_items.keys()
+        if 'BLENDER_EEVEE_NEXT' in engines:
             context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
         else:
             context.scene.render.engine = 'BLENDER_EEVEE'

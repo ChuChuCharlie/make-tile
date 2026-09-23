@@ -4,8 +4,6 @@ from random import random
 import bpy
 import addon_utils
 from bpy.types import Panel
-from bpy.props import BoolProperty, StringProperty, EnumProperty
-from bpy_extras.io_utils import ExportHelper
 from .. utils.registration import get_prefs
 from .voxeliser import voxelise, make_manifold
 from .decimator import decimate
@@ -15,7 +13,6 @@ from . bakedisplacement import (
     reset_renderer_from_bake,
     bake_displacement_map)
 from . return_to_preview import set_to_preview
-from ..enums.enums import units
 
 # TODO: Currently if you select an architectural element rather than a tile the exporter fails.
 class MT_PT_Export_Panel(Panel):
@@ -35,7 +32,6 @@ class MT_PT_Export_Panel(Panel):
     def draw(self, context):
         scene = context.scene
         scene_props = scene.mt_scene_props
-        obj = context.object
         prefs = get_prefs()
 
         char_width = 9  # TODO find a way of actually getting this rather than guessing
@@ -55,14 +51,6 @@ class MT_PT_Export_Panel(Panel):
         layout = self.layout
 
         layout.operator('scene.mt_export_tile', text='Export Tile')
-        op = layout.operator('scene.mt_export_object', text='Export Active Object')
-        op.voxelise = scene_props.voxelise_on_export
-        op.decimate = scene_props.decimate_on_export
-        op.make_manifold = scene_props.fix_non_manifold
-        op.export_units = scene_props.export_units
-        op.filepath = os.path.join(
-            prefs.default_export_path,
-            obj.name + '.stl')
 
         layout.prop(prefs, 'default_export_path')
         layout.prop(scene_props, 'export_units')
@@ -81,121 +69,6 @@ class MT_PT_Export_Panel(Panel):
                 row = layout.row()
                 row.label(text=line)
 
-
-class MT_OT_Export_Object(bpy.types.Operator, ExportHelper):
-    bl_idname = "scene.mt_export_object"
-    bl_label = "Export Object"
-    bl_description = "Export the active object."
-    bl_options = {'REGISTER'}
-
-    filename_ext = ".stl"
-
-    filter_glob: StringProperty(
-        default="*.stl",
-        options={'HIDDEN'},
-        maxlen=255)
-
-    voxelise: BoolProperty(
-        name="Voxelise",
-        description="Voxelise on Export",
-        default=False
-    )
-
-    decimate: BoolProperty(
-        name="Decimate",
-        description="Decimate on Export",
-        default=False
-    )
-
-    make_manifold: BoolProperty(
-        name="Make Manifold",
-        description="Make Manifold",
-        default=False
-    )
-
-    export_units: EnumProperty(
-        name="Units",
-        description="Default Units",
-        items=units
-    )
-
-    @classmethod
-    def poll(cls, context):
-        obj = context.object
-        return obj is not None and obj.mode == 'OBJECT' and obj.type == 'MESH'
-
-    def execute(self, context):
-        # set up exporter options
-        voxelise_on_export = self.voxelise
-        decimate_on_export = self.decimate
-        fix_non_manifold = self.make_manifold
-
-        # Controls if we rescale on export
-        blend_units = self.export_units
-        if blend_units == 'CM':
-            unit_multiplier = 10
-        elif blend_units == 'INCHES':
-            unit_multiplier = 25.4
-        else:
-            unit_multiplier = 1
-
-        # The object to export
-        obj = context.active_object
-
-        if voxelise_on_export or decimate_on_export or fix_non_manifold:
-            depsgraph = context.evaluated_depsgraph_get()
-            object_eval = obj.evaluated_get(depsgraph)
-            mesh_from_eval = bpy.data.meshes.new_from_object(object_eval)
-            dup_obj = bpy.data.objects.new('dupe', mesh_from_eval)
-            dup_obj.location = obj.location
-            dup_obj.rotation_euler = obj.rotation_euler
-            dup_obj.scale = obj.scale
-            dup_obj.parent = obj.parent
-            context.view_layer.active_layer_collection.collection.objects.link(dup_obj)
-
-            if voxelise_on_export:
-                voxelise(context, dup_obj)
-            if decimate_on_export:
-                decimate(context, dup_obj)
-            if fix_non_manifold:
-                make_manifold(context, dup_obj)
-
-            # export our object
-            with bpy.context.temp_override(
-                    object=dup_obj,
-                    active_object=dup_obj,
-                    selected_objects=[dup_obj],
-                    selected_editable_objects=[dup_obj]
-                    ):
-                bpy.ops.export_mesh.stl(
-                    filepath=self.filepath,
-                    check_existing=True,
-                    filter_glob="*.stl",
-                    use_selection=True,
-                    global_scale=unit_multiplier,
-                    use_mesh_modifiers=True)
-
-            bpy.data.objects.remove(dup_obj, do_unlink=True)
-
-        else:
-            # export our object
-            with bpy.context.temp_override(
-                    object=obj,
-                    active_object=obj,
-                    selected_objects=[obj],
-                    selected_editable_objects=[obj]
-                    ):
-                bpy.ops.export_mesh.stl(
-                    filepath=self.filepath,
-                    check_existing=True,
-                    filter_glob="*.stl",
-                    use_selection=True,
-                    global_scale=unit_multiplier,
-                    use_mesh_modifiers=True)
-
-        self.report({'INFO'}, f'{obj.name} exported to {self.filepath}')
-
-        return {'FINISHED'}
 
 class MT_OT_Export_Tile_Variants(bpy.types.Operator):
     bl_idname = "scene.mt_export_tile"
