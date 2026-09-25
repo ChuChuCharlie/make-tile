@@ -21,7 +21,7 @@ bl_info = {
     "author": "Matthew Peters",
     "description": "Add on for creating 3d printable tiles",
     "blender": (4, 2, 0),
-    "version": (0, 1, 33),
+    "version": (0, 1, 34),
     "location": "View3D > UI > MakeTile",
     "warning": "",
     "doc_url": "https://maketile.readthedocs.io/en/latest/",

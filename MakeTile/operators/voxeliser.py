@@ -1,9 +1,9 @@
-import textwrap
+import time
 import bpy
+import bmesh
 import addon_utils
 from bpy.types import Panel
 from .. lib.utils.collections import get_objects_owning_collections
-from ..lib.utils.selection import deselect_all, select, activate
 
 class MT_PT_Voxelise_Panel(Panel):
     bl_order = 9
@@ -24,32 +24,11 @@ class MT_PT_Voxelise_Panel(Panel):
         scene_props = scene.mt_scene_props
         layout = self.layout
 
-        char_width = 9  # TODO find a way of actually getting this rather than guessing
-        print_tools_txt = "For more options please enable the 3D print Tools addon included with blender"
-
-        # get panel width so we can line wrap print_tools_txt
-        tool_shelf = None
-        area = bpy.context.area
-
-        for region in area.regions:
-            if region.type == 'UI':
-                tool_shelf = region
-
-        width = tool_shelf.width / char_width
-        wrapped = textwrap.wrap(print_tools_txt, width)
-
         layout.operator('scene.mt_voxelise_objects', text='Voxelise Objects')
         layout.prop(scene_props, 'voxel_size')
         layout.prop(scene_props, 'voxel_adaptivity')
         layout.prop(scene_props, 'voxel_merge')
-
-        if addon_utils.check("object_print3d_utils") == (True, True):
-            layout.prop(scene_props, 'fix_non_manifold')
-        else:
-            for line in wrapped:
-                row = layout.row()
-                row.label(text=line)
-
+        layout.prop(scene_props, 'fix_non_manifold')
 
 class MT_OT_Object_Voxeliser(bpy.types.Operator):
     """Applies all modifiers to the selected objects and, optionally merges them
@@ -114,23 +93,106 @@ def voxelise(context, obj):
     obj.mt_object_props.geometry_type = 'VOXELISED'
 
 
-def make_manifold(context, obj):
+def count_non_manifold_edges(obj):
+    """Return the number of non-watertight edges in the object's mesh.
+
+    An edge is treated as non-manifold if it is not linked to exactly two faces
+    (boundary, wire, or shared by three or more faces).
+
+    Args:
+        obj (bpy.types.Object): mesh object
+
+    Returns:
+        int: number of non-manifold edges
+    """
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.edges.ensure_lookup_table()
+    non_manifold = sum(1 for e in bm.edges if len(e.link_faces) != 2)
+    bm.free()
+    return non_manifold
+
+
+def ensure_print3d_addon():
+    """Enable Blender's built-in 3D-Print Toolbox if available.
+
+    Returns:
+        bool: True if the addon is loaded and enabled, else False
+    """
+    loaded, enabled = addon_utils.check("object_print3d_utils")
+    if loaded and enabled:
+        return True
+
+    try:
+        addon_utils.enable("object_print3d_utils", default_set=True)
+    except Exception:
+        return False
+
+    loaded, enabled = addon_utils.check("object_print3d_utils")
+    return loaded and enabled
+
+
+def make_manifold(context, obj, report=None):
     """Make the passed in object manifold using the 3dPrint toolkit addon
+
+    Falls back to a bounded ``bpy.ops.mesh.fill_holes`` loop when the 3D-Print
+    Toolbox is unavailable.
 
     Args:
         context (bpy.context): context
         obj (bpy.types.Object): object
+        report (callable, optional): operator report method for warnings
     """
-    # TODO See if we can speed this up by calling the individual methods of the print3D toolkit
-    # check 3d print toolkit is installed and active
-    if addon_utils.check("object_print3d_utils") == (True, True):
-        selected = context.selected_objects
-        active = context.active_object
-        deselect_all()
-        select(obj.name)
-        activate(obj.name)
-        bpy.ops.mesh.print3d_clean_non_manifold()
-        deselect_all()
-        for obj in selected:
-            select(obj.name)
-        activate(active.name)
+    non_manifold = count_non_manifold_edges(obj)
+    if non_manifold == 0:
+        return
+
+    # Ensure this object is the active one so mesh operators operate on it.
+    context.view_layer.objects.active = obj
+
+    if ensure_print3d_addon():
+        with bpy.context.temp_override(
+                object=obj,
+                active_object=obj,
+                selected_objects=[obj],
+                selected_editable_objects=[obj],
+                edit_object=obj):
+            bpy.ops.mesh.print3d_clean_non_manifold(threshold=0.0001, sides=0)
+
+        non_manifold = count_non_manifold_edges(obj)
+        if non_manifold > 0 and report:
+            report(
+                {'WARNING'},
+                f"{obj.name}: {non_manifold} non-manifold edges remain after cleanup")
+        return
+
+    # Fallback: run fill_holes repeatedly with a time/iteration guard.
+    if obj.mode != 'EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
+
+    timeout = 30  # seconds
+    max_iterations = 10
+    start_time = time.time()
+
+    for _ in range(max_iterations):
+        if time.time() - start_time > timeout:
+            if report:
+                report(
+                    {'WARNING'},
+                    f"{obj.name}: make_manifold timed out after {timeout}s with {non_manifold} non-manifold edges remaining")
+            break
+
+        with bpy.context.temp_override(
+                object=obj,
+                active_object=obj,
+                selected_objects=[obj],
+                selected_editable_objects=[obj],
+                edit_object=obj):
+            bpy.ops.mesh.fill_holes(sides=0)
+
+        non_manifold = count_non_manifold_edges(obj)
+        if non_manifold == 0:
+            break
+
+    if obj.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')

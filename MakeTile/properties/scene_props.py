@@ -256,7 +256,7 @@ def create_scene_props():
         "fix_non_manifold": BoolProperty(
             name="Fix non-manifold",
             description="Attempt to fix geometry errors",
-            default=False),
+            default=True),
         "decimation_ratio": FloatProperty(
             name="Decimation Ratio",
             description="Amount to decimate by. Smaller = more simplification",

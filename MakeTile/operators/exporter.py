@@ -1,8 +1,6 @@
 import os
-import textwrap
 from random import random
 import bpy
-import addon_utils
 from bpy.types import Panel
 from .. utils.registration import get_prefs
 from .voxeliser import voxelise, make_manifold
@@ -14,7 +12,6 @@ from . bakedisplacement import (
     bake_displacement_map)
 from . return_to_preview import set_to_preview
 
-# TODO: Currently if you select an architectural element rather than a tile the exporter fails.
 class MT_PT_Export_Panel(Panel):
     bl_order = 50
     bl_space_type = "VIEW_3D"
@@ -34,20 +31,6 @@ class MT_PT_Export_Panel(Panel):
         scene_props = scene.mt_scene_props
         prefs = get_prefs()
 
-        char_width = 9  # TODO find a way of actually getting this rather than guessing
-        print_tools_txt = "For more options please enable the 3D print Tools addon included with blender."
-
-        # get panel width so we can line wrap print_tools_txt
-        tool_shelf = None
-        area = bpy.context.area
-
-        for region in area.regions:
-            if region.type == 'UI':
-                tool_shelf = region
-
-        width = tool_shelf.width / char_width
-        wrapped = textwrap.wrap(print_tools_txt, width)
-
         layout = self.layout
 
         layout.operator('scene.mt_export_tile', text='Export Tile')
@@ -61,13 +44,6 @@ class MT_PT_Export_Panel(Panel):
 
         if scene_props.randomise_on_export is True:
             layout.prop(scene_props, 'num_variants')
-
-        if addon_utils.check("object_print3d_utils") == (True, True):
-            layout.prop(scene_props, 'fix_non_manifold')
-        else:
-            for line in wrapped:
-                row = layout.row()
-                row.label(text=line)
 
 
 class MT_OT_Export_Tile_Variants(bpy.types.Operator):
@@ -122,12 +98,26 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
         # all visible objects in the collections
         tile_collections = set()
 
-        for obj in context.selected_objects:
+        selected_tiles = [
+            obj for obj in context.selected_objects
+            if obj.type == 'MESH' and getattr(obj, 'mt_object_props', None) and obj.mt_object_props.is_mt_object]
+
+        if not selected_tiles:
+            self.report({'WARNING'}, 'No MakeTile objects selected for export.')
+            reset_renderer_from_bake(orig_settings)
+            return {'CANCELLED'}
+
+        for obj in selected_tiles:
             obj_collections = get_objects_owning_collections(obj.name)
 
             for collection in obj_collections:
                 if collection.mt_tile_props.is_mt_collection is True:
                     tile_collections.add(collection)
+
+        if not tile_collections:
+            self.report({'WARNING'}, 'Selected object(s) are not part of a MakeTile collection.')
+            reset_renderer_from_bake(orig_settings)
+            return {'CANCELLED'}
 
         for collection in tile_collections:
             visible_objects = []
@@ -231,7 +221,14 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
                     if decimate_on_export:
                         decimate(context, dupes[0])
                     if scene_props.fix_non_manifold:
-                        make_manifold(context, dupes[0])
+                        make_manifold(context, dupes[0], report=self.report)
+
+                    # Ensure only the joined duplicate is selected/active before
+                    # origin_set and STL export (make_manifold may have changed
+                    # the selection state).
+                    bpy.ops.object.select_all(action='DESELECT')
+                    dupes[0].select_set(True)
+                    bpy.context.view_layer.objects.active = dupes[0]
 
                     # set origin to center
                     with bpy.context.temp_override(object=dupes[0],active_object=dupes[0],selected_objects=[dupes[0]],selected_editable_objects=[dupes[0]]):
@@ -239,23 +236,14 @@ class MT_OT_Export_Tile_Variants(bpy.types.Operator):
                         dupes[0].location = (0, 0, 0)
 
                     # export our object
-                    if (4, 1, 0) < bpy.app.version:
-                        #Use the newer, faster bpy.ops.wm.stl_export function 
-                        bpy.ops.wm.stl_export(
-                            filepath=file_path,
-                            check_existing=True,
-                            filter_glob="*.stl",
-                            export_selected_objects=True,
-                            global_scale=unit_multiplier,
-                            apply_modifiers=True)
-                    else:
-                        bpy.ops.export_mesh.stl(
-                            filepath=file_path,
-                            check_existing=True,
-                            filter_glob="*.stl",
-                            use_selection=True,
-                            global_scale=unit_multiplier,
-                            use_mesh_modifiers=True)
+                    #Use the newer, faster bpy.ops.wm.stl_export function
+                    bpy.ops.wm.stl_export(
+                        filepath=file_path,
+                        check_existing=True,
+                        filter_glob="*.stl",
+                        export_selected_objects=True,
+                        global_scale=unit_multiplier,
+                        apply_modifiers=True)
 
                     objects.remove(dupes[0], do_unlink=True)
 

@@ -197,8 +197,3 @@ class MT_OT_Remove_Material_From_Defaults(Operator):
         return {'FINISHED'}
 
 
-# TODO: Stub - reload_asset_libraries
-
-
-def reload_asset_libraries():
-    print('reload_asset_libraries')

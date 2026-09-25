@@ -142,6 +142,7 @@ def redo_tile_panel_header(self, layout, blueprints, tile_type):
         if self.base_blueprint in ('OPENLOCK_S_WALL', 'PLAIN_S_WALL'):
             layout.prop(self, 'floor_material')
 
+
             layout.label(text="Floor Thickness")
             layout.prop(self, 'floor_thickness', text="")
 

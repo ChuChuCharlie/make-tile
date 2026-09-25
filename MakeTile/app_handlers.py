@@ -3,9 +3,6 @@ import json
 import bpy
 from bpy.app.handlers import persistent
 from .utils.registration import get_prefs, get_path
-from .materials.materials import (
-    get_blend_filenames,
-    load_materials)
 from .lib.utils.file_handling import absolute_file_paths
 
 

@@ -1,5 +1,3 @@
-import textwrap
-import addon_utils
 from math import radians
 import bpy
 from bpy.types import Panel, Operator

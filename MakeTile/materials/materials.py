@@ -1,36 +1,7 @@
-import os
 import bpy
-from pathlib import Path
 from .. utils.registration import get_prefs
-from ..lib.utils.utils import slugify
-from ..lib.utils.file_handling import find_and_rename
 from .. lib.utils.vertex_groups import (
-    get_verts_in_vert_group,
     get_vert_indexes_in_vert_group)
-
-
-def load_materials(filepath):
-    """Load all materials in a file into the scene. Checks to see whether a material is unique first.
-
-    Args:
-        filepath (str): path to file containing materials.
-    """
-    with bpy.data.libraries.load(filepath) as (data_from, data_to):
-        data_to.materials = data_from.materials
-
-    for new_mat in data_to.materials:
-        existing_mats = [mat for mat in bpy.data.materials if mat != new_mat]
-        unique, matched = material_is_unique(new_mat, existing_mats)
-        if not unique:
-            bpy.data.materials.remove(new_mat)
-
-
-def get_blend_filenames(directory_path):
-    blend_filenames = []
-    if os.path.exists(directory_path):
-        blend_filenames = [name for name in os.listdir(directory_path)
-                           if name.endswith('.blend')]
-    return blend_filenames
 
 
 def load_secondary_material():
@@ -182,63 +153,3 @@ def assign_texture_to_areas(obj, primary_material, secondary_material):
         else:
             assign_mat_to_vert_group(
                 group.name, obj, bpy.data.materials[primary_material])
-
-# TODO Ensure this works for custom image material. I think we also need
-# to check whether image is unique otherwise it won't work
-
-
-def material_is_unique(material, materials):
-    """Check whether the passed in material already exists.
-
-    Parameters
-    material : bpy.types.Material
-        material to check for uniqueness
-    materials[list]: List of bpy.types.Material
-    Returns
-    Boolean
-        True if material is unique
-
-    matched_material : bpy.types.Material
-        Matching material. None if material is unique
-
-    """
-    found = []
-    # slugify material name and strip digits
-    mat_name = slugify(material.name.rstrip('0123456789. '))
-
-    # check if material shares a name with another material (minus numeric suffix)
-    for mat in materials:
-        stripped_name = slugify(mat.name.rstrip('0123456789. '))
-        if stripped_name == mat_name:
-            found.append(mat)
-
-    if len(found) == 0:
-        return True, None
-
-    # check if materials that share the same name share the same node tree by comparing names of nodes
-    mat_node_keys = material.node_tree.nodes.keys()
-
-    found_2 = []
-    for mat in found:
-        found_mat_node_keys = mat.node_tree.nodes.keys()
-        if mat_node_keys.sort() == found_mat_node_keys.sort():
-            found_2.append(mat)
-
-    if len(found_2) == 0:
-        return True, None
-
-    # check if all nodes of type 'VALUE' have the same default values on their outputs
-    mat_node_values = []
-    for node in material.node_tree.nodes:
-        if node.type == 'VALUE':
-            mat_node_values.append(node.outputs[0].default_value)
-
-    for mat in found_2:
-        found_mat_node_values = []
-        for node in mat.node_tree.nodes:
-            if node.type == 'VALUE':
-                found_mat_node_values.append(node.outputs[0].default_value)
-        if mat_node_values.sort() == found_mat_node_values.sort():
-            return False, mat
-
-    return True, None

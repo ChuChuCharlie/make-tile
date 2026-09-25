@@ -43,15 +43,12 @@ tile_types = [
     #("CONNECTING_COLUMN", "Connecting Column", "", 11)
 ]
 
-# TODO: Get rid of difference etc. from here and always use boolean_types
 geometry_types = [
     ("NONE", "None", ""),
     ("BASE", "Base", ""),
     ("CORE", "Core", ""),
     # ("PREVIEW", "Preview", ""),
     # ("DISPLACEMENT", "Displacement", ""),
-    ("DIFFERENCE", "Difference", ""),
-    ("UNION", "Union", ""),
     ("PROP", "Prop", ""),
     ("GREEBLE", "Greeble", ""),
     ("TRIMMER", "Trimmer", ""),
