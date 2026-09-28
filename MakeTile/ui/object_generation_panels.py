@@ -80,7 +80,8 @@ class MT_PT_Booleans_Panel(bpy.types.Panel):
 
         for cutter in obj.mt_object_props.cutters_collection:
             seperator = '.'
-            stripped_name = cutter.name.split(seperator, 1)[0]
+            label = cutter.cutter_obj.name if cutter.cutter_obj else ""
+            stripped_name = label.split(seperator, 1)[0]
             layout.prop(cutter, "value", text=stripped_name)
 
 

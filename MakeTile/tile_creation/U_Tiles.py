@@ -25,8 +25,7 @@ from ..lib.bmturtle.helpers import (
     bm_select_all,
     bm_deselect_all,
     assign_verts_to_group,
-    select_verts_in_bounds,
-    bm_shortest_path)
+    select_verts_in_bounds)
 from .. utils.registration import get_prefs
 from .. lib.utils.collections import (
     add_object_to_collection)
@@ -1239,7 +1238,7 @@ def draw_u_wall_core(dimensions, subdivs, wall_position, margin=0.001):
     bm, core, deform_groups, vert_locs = draw_u_core(
         dimensions, subdivs, wall_position, margin)
     vert_groups = create_u_core_vert_groups_vert_lists_2(
-        bm, dimensions, margin, vert_locs, subdivs)
+        bm, dimensions, margin, vert_locs, subdivs, wall_position)
 
     blank_groups = [
         'Leg 1 Top',
@@ -1303,7 +1302,8 @@ def draw_u_wall_core(dimensions, subdivs, wall_position, margin=0.001):
 
 
 # @profile
-def create_u_core_vert_groups_vert_lists_2(bm, dimensions, margin, vert_locs, subdivs):
+def create_u_core_vert_groups_vert_lists_2(
+        bm, dimensions, margin, vert_locs, subdivs, wall_position='SIDE'):
     """Create vertex group vertex lists for U core sides.
 
     Args:
@@ -1332,6 +1332,8 @@ def create_u_core_vert_groups_vert_lists_2(bm, dimensions, margin, vert_locs, su
             x: int,
             width: int,
             height: int}): subdivisions
+        wall_position (str): 'SIDE', 'CENTER' or 'EXTERIOR'.  EXTERIOR walls
+            have their bottom ring at Z=0.0; otherwise it is at base_height.
 
     Returns:
         dict{
@@ -1351,6 +1353,7 @@ def create_u_core_vert_groups_vert_lists_2(bm, dimensions, margin, vert_locs, su
             End Wall Bottom: list[BMVert]}: Verts to assign to vert groups
     """
     height = dimensions['height']
+    base_height = dimensions['base_height']
     thickness_diff = dimensions['thickness_diff']
     thickness = dimensions['thickness']
     leg_1_inner_len = dimensions['leg_1_inner'] + (thickness_diff / 2)
@@ -1409,88 +1412,35 @@ def create_u_core_vert_groups_vert_lists_2(bm, dimensions, margin, vert_locs, su
             bm=bm)
     bm_deselect_all(bm)
 
-    # bottom
-    # leg 1
-    inner_locs = vert_locs['Leg 1 Inner'][::-1]
-    outer_locs = vert_locs['Leg 1 Outer']
+    # Select bottom-ring vertices using a thin Z slice and X/Y bounds.
+    # The bottom ring is coplanar and its Z is controlled by the same code
+    # path that creates the core (base_height for SIDE/CENTER, 0.0 for
+    # EXTERIOR).  Using bounding-box selection avoids the expensive per-pair
+    # Dijkstra searches previously used here.  See issue #23.
+    z_buffer = margin * 4
+    bottom_z = 0.0 if wall_position == 'EXTERIOR' else base_height
 
-    selected_verts = []
-    i = 0
-    while i < len(outer_locs) and i < len(inner_locs):
-        v1_co, v1_index, dist = kd.find(inner_locs[i])
-        v2_co, v2_index, dist = kd.find(outer_locs[i])
+    def _select_bottom_verts(inner_locs, outer_locs):
+        """Return bottom vertices between inner and outer perimeters."""
+        min_x = min(min(v.x for v in inner_locs), min(v.x for v in outer_locs))
+        max_x = max(max(v.x for v in inner_locs), max(v.x for v in outer_locs))
+        min_y = min(min(v.y for v in inner_locs), min(v.y for v in outer_locs))
+        max_y = max(max(v.y for v in inner_locs), max(v.y for v in outer_locs))
 
-        bm.verts.ensure_lookup_table()
-        v1 = bm.verts[v1_index]
-        v2 = bm.verts[v2_index]
+        lbound = (min_x, min_y, bottom_z - z_buffer)
+        ubound = (max_x, max_y, bottom_z + z_buffer)
+        return select_verts_in_bounds(lbound, ubound, margin / 2, bm)
 
-        # TODO This is really expensive. See if we can find an alternative
-        nodes = bm_shortest_path(bm, v1, v2)
-        node = nodes[v2]
-
-        for e in node.shortest_path:
-            e.select_set(True)
-        bm.select_flush(True)
-
-        verts = [v for v in bm.verts if v.select]
-        selected_verts.extend(verts)
-        i += 1
-
-    vert_groups['Leg 1 Bottom'] = selected_verts
+    vert_groups['Leg 1 Bottom'] = _select_bottom_verts(
+        vert_locs['Leg 1 Inner'][::-1], vert_locs['Leg 1 Outer'])
     bm_deselect_all(bm)
 
-    # leg 2
-    inner_locs = vert_locs['Leg 2 Inner'][::-1]
-    outer_locs = vert_locs['Leg 2 Outer']
-
-    selected_verts = []
-    i = 0
-    while i < len(inner_locs) and i < len(outer_locs):
-        v1_co, v1_index, dist = kd.find(inner_locs[i])
-        v2_co, v2_index, dist = kd.find(outer_locs[i])
-
-        bm.verts.ensure_lookup_table()
-        v1 = bm.verts[v1_index]
-        v2 = bm.verts[v2_index]
-
-        nodes = bm_shortest_path(bm, v1, v2)
-        node = nodes[v2]
-
-        for e in node.shortest_path:
-            e.select_set(True)
-        bm.select_flush(True)
-
-        verts = [v for v in bm.verts if v.select]
-        selected_verts.extend(verts)
-        i += 1
-    vert_groups['Leg 2 Bottom'] = selected_verts
+    vert_groups['Leg 2 Bottom'] = _select_bottom_verts(
+        vert_locs['Leg 2 Inner'][::-1], vert_locs['Leg 2 Outer'])
     bm_deselect_all(bm)
 
-    # end wall
-    inner_locs = vert_locs['End Wall Inner'][::-1]
-    outer_locs = vert_locs['End Wall Outer']
-
-    selected_verts = []
-    i = 0
-    while i < len(inner_locs) and i < len(outer_locs):
-        v1_co, v1_index, dist = kd.find(inner_locs[i])
-        v2_co, v2_index, dist = kd.find(outer_locs[i])
-
-        bm.verts.ensure_lookup_table()
-        v1 = bm.verts[v1_index]
-        v2 = bm.verts[v2_index]
-
-        nodes = bm_shortest_path(bm, v1, v2)
-        node = nodes[v2]
-
-        for e in node.shortest_path:
-            e.select_set(True)
-        bm.select_flush(True)
-
-        verts = [v for v in bm.verts if v.select]
-        selected_verts.extend(verts)
-        i += 1
-    vert_groups['End Wall Bottom'] = selected_verts
+    vert_groups['End Wall Bottom'] = _select_bottom_verts(
+        vert_locs['End Wall Inner'][::-1], vert_locs['End Wall Outer'])
     bm_deselect_all(bm)
 
     # top

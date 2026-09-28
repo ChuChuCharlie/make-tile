@@ -474,8 +474,13 @@ class MT_Tile_Generator:
         else:
             return True
 
-    def __init__(self):
-        """Initialise."""
+    def __init__(self, *args, **kwargs):
+        """Initialise.
+
+        Blender 4.4+ passes internal constructor arguments to operator
+        subclasses, so we must accept and forward them to the base class.
+        """
+        super().__init__(*args, **kwargs)
         self.cursor_orig_loc = (0, 0, 0)
         self.cursor_orig_rot = (0, 0, 0)
 
@@ -996,9 +1001,6 @@ def load_openlock_top_peg(tile_props):
 
     return peg
 
-# TODO: #3 Fix bug where toggling booleans in UI doesn't work if core or base have been renamed
-
-
 def set_bool_obj_props(bool_obj, parent_obj, tile_props, bool_type):
     """Set properties for boolean object used for e.g. clip cutters.
 
@@ -1081,7 +1083,6 @@ def set_bool_props(bool_obj, target_obj, bool_type, solver='FAST'):
     # add cutters to object's cutters_collection
     # so we can activate and deactivate them when necessary
     cutter_coll_item = target_obj.mt_object_props.cutters_collection.add()
-    cutter_coll_item.name = bool_obj.name
     cutter_coll_item.value = True
-    # bpy.context.view_layer.update()
-    cutter_coll_item.parent = target_obj.name
+    cutter_coll_item.target_obj = target_obj
+    cutter_coll_item.cutter_obj = bool_obj

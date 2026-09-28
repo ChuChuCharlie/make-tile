@@ -6,22 +6,30 @@ from ..enums.enums import geometry_types, boolean_types
 
 class MT_Cutter_Item(PropertyGroup):
     def update_use_cutter(self, context):
-        if self.parent != "":
-            parent_obj = bpy.data.objects[self.parent]
-            bool_mod = parent_obj.modifiers[self.name + '.bool']
-            bool_mod.show_viewport = self.value
+        target_obj = self.target_obj
+        cutter_obj = self.cutter_obj
+        if target_obj is None or cutter_obj is None:
+            return
+        for mod in target_obj.modifiers:
+            if mod.type == 'BOOLEAN' and mod.object == cutter_obj:
+                mod.show_viewport = self.value
+                return
 
-    name: bpy.props.StringProperty(
-        name="Cutter Name",
-        default="")
     value: bpy.props.BoolProperty(
         name="",
         default=True,
         update=update_use_cutter
-        )
-    parent: bpy.props.StringProperty(
-        name="",
-        default="")
+    )
+
+    target_obj: bpy.props.PointerProperty(
+        type=bpy.types.Object,
+        name="Target Object"
+    )
+
+    cutter_obj: bpy.props.PointerProperty(
+        type=bpy.types.Object,
+        name="Cutter Object"
+    )
 
 
 class MT_Preview_Materials(PropertyGroup):

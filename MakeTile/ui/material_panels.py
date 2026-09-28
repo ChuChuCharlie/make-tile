@@ -51,9 +51,8 @@ class MT_PT_Material_Options_Panel(Panel):
 
     @classmethod
     def poll(cls, context):
-        # TODO only show in preview mode
         obj = context.object
-        if obj is not None:
+        if obj is not None and obj.type == 'MESH':
             mat = obj.active_material
             return mat is not None
         return False
@@ -61,10 +60,16 @@ class MT_PT_Material_Options_Panel(Panel):
     def draw(self, context):
         scene_props = context.scene.mt_scene_props
         layout = self.layout
-        # TODO check that changing tile resolution in menu actuallly changes it.
-        # layout.prop(scene_props, 'tile_resolution')
-        layout.prop(scene_props, 'displacement_strength')
         obj = context.object
+
+        # Tile resolution only applies to displacement preview objects because it
+        # controls the resolution of the displacement map baked by Make 3D.
+        # See operators/bakedisplacement.py where this value is read.
+        obj_props = obj.mt_object_props
+        if obj_props.is_displacement and not obj_props.is_displaced:
+            layout.prop(scene_props, 'tile_resolution')
+
+        layout.prop(scene_props, 'displacement_strength')
         material = obj.active_material
         tree = material.node_tree
         nodes = tree.nodes

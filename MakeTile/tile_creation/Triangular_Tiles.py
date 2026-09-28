@@ -1,5 +1,5 @@
 import os
-from math import radians, cos, sqrt, modf
+from math import radians, cos, sqrt, modf, atan2
 import bpy
 import bmesh
 from mathutils import Vector
@@ -18,9 +18,7 @@ from ..lib.bmturtle.scripts import (
     draw_tri_floor_core,
     draw_tri_slot_cutter)
 from ..lib.bmturtle.helpers import (
-    bm_select_all,
-    bmesh_array,
-    extrude_translate)
+    bmesh_array)
 
 from .. lib.utils.collections import (
     add_object_to_collection)
@@ -401,11 +399,7 @@ def spawn_openlock_base_clip_cutters(self, dimensions, tile_props):
     loc_B = dimensions['loc_B']
     loc_C = dimensions['loc_C']
 
-    cursor = bpy.context.scene.cursor
-    cursor_orig_loc = cursor.location.copy()
-    cursor_orig_rot = cursor.rotation_euler.copy()
-
-    if a or b or c >= 2:
+    if a >= 2 or b >= 2 or c >= 2:
         preferences = get_prefs()
         cutter_file = self.get_base_socket_filename()
         booleans_path = os.path.join(
@@ -577,49 +571,58 @@ def spawn_openlock_base_clip_cutters(self, dimensions, tile_props):
             bm.free()
             cutters.append(c_cutter)
 
-        # TODO Simplify this now we only generate socket for isosceles triangles.
+        # Add a socket along the hypotenuse for isosceles right triangles only.
         if A == 90 and b == c and a >= 2:
             me = cutter.data.copy()
             a_cutter = bpy.data.objects.new("Leg 3 Cutter", me)
             bm = bmesh.new()
             bm.from_mesh(me)
             add_object_to_collection(a_cutter, tile_props.tile_name)
-            turtle = bpy.context.scene.cursor
-            turtle.location = loc_C
-            turtle.rotation_euler = (0, 0, 0)
-            bm.select_mode = {'VERT'}
-            bm_select_all(bm)
-            dims = cutter.dimensions.copy() + cutter_end_cap.dimensions.copy() + cutter_start_cap.dimensions.copy()
-            offset = Vector((1, 0, 0)) * Vector(dims)
+
+            # Array the clip cutters from the centre of the hypotenuse toward
+            # corners B and C, leaving a margin for the end caps.
+            cutter_offset = cutter.dimensions.x
+            fit_length = max(0, a - 1.5)
+            array_count = modf(fit_length / cutter_offset)[1]
+            half_span = (array_count * cutter_offset) / 2
 
             bm = bmesh_array(
-                source_obj=a_cutter,
+                source_obj=cutter,
                 source_bm=bm,
                 start_cap=cutter_start_cap,
                 end_cap=cutter_end_cap,
                 relative_offset_displace=(1, 0, 0),
-                fit_length=(a - 2.5),
+                fit_length=fit_length,
                 fit_type='FIT_LENGTH')
-                
-            count = modf((a - 2.5) / offset[0])[1]
-            bm.select_mode = {'VERT'}
-            bm_select_all(bm)
-            turtle.rotation_euler = (0, 0, -radians(A))
-            extrude_translate(
-                bm, (0, b, 0), del_original=False, extrude=False)
-            turtle.rotation_euler = (0, 0, 0)
-            extrude_translate(bm, (1, 0.25, 0.0002), extrude=False)
+
+            # Centre the array along its local X axis.
+            bmesh.ops.translate(
+                bm,
+                verts=bm.verts,
+                vec=(-half_span, 0, 0),
+                space=a_cutter.matrix_world)
+
+            # Align the strip with the hypotenuse and place it at the midpoint,
+            # offset inward by half the base thickness.
+            midpoint = (loc_B + loc_C) / 2
+            inward = (loc_A - midpoint).normalized()
+            target = midpoint + inward * 0.25
+
+            hyp_dir = loc_C - loc_B
+            angle = atan2(hyp_dir.y, hyp_dir.x)
+
             bmesh.ops.rotate(
                 bm,
                 verts=bm.verts,
-                cent=loc_C,
-                matrix=Matrix.Rotation(radians(-90 - B) * -1, 3, 'Z'),
+                cent=(0, 0, 0),
+                matrix=Matrix.Rotation(angle + radians(180), 3, 'Z'),
                 space=a_cutter.matrix_world)
 
-            caps = 0.083333
-            turtle.rotation_euler = (0, 0, radians(C))
-            extrude_translate(bm, (0, (caps * (count + 1)), 0),
-                                del_original=False, extrude=False)
+            bmesh.ops.translate(
+                bm,
+                verts=bm.verts,
+                vec=(target.x, target.y, 0.0002),
+                space=a_cutter.matrix_world)
 
             bm.to_mesh(me)
             bm.free()
@@ -628,8 +631,6 @@ def spawn_openlock_base_clip_cutters(self, dimensions, tile_props):
         bpy.data.objects.remove(cutter_start_cap)
         bpy.data.objects.remove(cutter_end_cap)
 
-        cursor.location = cursor_orig_loc
-        cursor.rotation_euler = cursor_orig_rot
         return cutters
     else:
         return None

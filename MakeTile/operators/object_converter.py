@@ -50,7 +50,10 @@ class MT_OT_Convert_To_MT_Obj(bpy.types.Operator):
         return self.execute(context)
 
     def execute(self, context):
-        #TODO rewrite this to get rid of all the changes between edit and object mode
+        # NOTE: one edit-mode switch remains because bpy.ops.uv.smart_project
+        # has no low-level Python equivalent. The repeated vertex_group_move
+        # loop was removed by creating the "All" group first so it sits at
+        # index 0 naturally.
         prefs = get_prefs()
         obj = context.object
         scene = context.scene
@@ -84,15 +87,16 @@ class MT_OT_Convert_To_MT_Obj(bpy.types.Operator):
         with bpy.context.temp_override(selected_objects=[base, obj],active_object=base,object=base):
             bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
 
-        # UV Project
-
+        # UV Project (smart_project requires edit mode)
         select(obj.name)
         activate(obj.name)
-        bpy.ops.object.mode_set(mode='EDIT')
-        select_all()
-        bpy.ops.uv.smart_project(island_margin=tile_props.UV_island_margin)
-        deselect_all()
-        bpy.ops.object.mode_set(mode='OBJECT')
+        mode('EDIT')
+        try:
+            select_all()
+            bpy.ops.uv.smart_project(island_margin=tile_props.UV_island_margin)
+            deselect_all()
+        finally:
+            mode('OBJECT')
 
         # set object props
         obj_props = obj.mt_object_props
@@ -109,27 +113,37 @@ class MT_OT_Convert_To_MT_Obj(bpy.types.Operator):
         # append secondary material
         obj.data.materials.append(bpy.data.materials[prefs.secondary_material])
 
-        # create an all vertex group and ensure it is at index 0 as otherwise
-        # the return to preview feature doesn't work properly
-        group = obj.vertex_groups.new(name="All")
-        verts = []
-        for vert in obj.data.vertices:
-            verts.append(vert.index)
-        group.add(verts, 1.0, 'ADD')
+        # Create the "All" vertex group required for the return-to-preview
+        # feature. If the object already has vertex groups, "All" is appended
+        # after them and must be moved to index 0. If there are no existing
+        # groups it naturally occupies index 0 and no move is needed.
+        all_group = obj.vertex_groups.new(name="All")
+        all_group.add([vert.index for vert in obj.data.vertices], 1.0, 'ADD')
 
-        obj.vertex_groups.active_index = group.index
-        while group.index > 0:
-               with bpy.context.temp_override(selected_objects=[obj],selected_editable_objects=[obj],object=obj,active_object=obj):
+        # Determine which groups existed before we added "All". If there
+        # were pre-existing groups we apply the material to each of them;
+        # otherwise we apply it to the entire object via "All".
+        existing_group_names = [
+            group.name for group in obj.vertex_groups
+            if group != all_group]
+        has_existing_groups = len(existing_group_names) > 0
+
+        # Ensure "All" is at index 0 when other groups exist. We still avoid
+        # edit/object mode churn by doing this in object mode.
+        if has_existing_groups:
+            obj.vertex_groups.active_index = all_group.index
+            while all_group.index > 0:
+                with bpy.context.temp_override(
+                        selected_objects=[obj],
+                        selected_editable_objects=[obj],
+                        object=obj,
+                        active_object=obj):
                     bpy.ops.object.vertex_group_move(direction='UP')
 
-        # check to see if there are already vertex groups on the object.
-        # If there are we assume that we want the material to be applied to each
-        # vertex group
-        if len(obj.vertex_groups) > 1:
-            textured_vertex_groups = [group.name for group in obj.vertex_groups if group.name != 'All']
-        # otherwise we assume we want to add the material to the entire object
+        if has_existing_groups:
+            textured_vertex_groups = existing_group_names
         else:
-            textured_vertex_groups = ['All']
+            textured_vertex_groups = [all_group.name]
 
         material = self.converter_material
         subsurf = add_subsurf_modifier(obj)
