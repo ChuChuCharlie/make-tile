@@ -79,6 +79,18 @@ def update_material_mapping(self, context):
                 mapping_node.inputs['Vector'])
 
 
+def _clamp_scene_float(self, context, prop_name, min_val=None, max_val=None):
+    """Clamp a FloatProperty to a valid range after UI edits."""
+    value = getattr(self, prop_name)
+    new_value = value
+    if min_val is not None and new_value < min_val:
+        new_value = min_val
+    if max_val is not None and new_value > max_val:
+        new_value = max_val
+    if new_value != value:
+        setattr(self, prop_name, new_value)
+
+
 def reset_part_defaults(self, context):
     tile_type = self.tile_type
     base_blueprint = self.base_blueprint
@@ -305,6 +317,41 @@ def create_scene_props():
             default=3,
             soft_max=8,
             update=update_disp_subdivisions),
+        # Shared triangular / corner tile dimensions. Defined here with limits
+        # so the sidebar panel enforces them regardless of which tile subclass
+        # is processed last during dynamic MT_Scene_Props creation.
+        "leg_1_len": FloatProperty(
+            name="Leg 1 Length",
+            description="Length of leg",
+            default=2,
+            min=0.5,
+            soft_min=0.5,
+            step=50,
+            precision=1,
+            update=lambda self, context: _clamp_scene_float(
+                self, context, 'leg_1_len', 0.5)),
+        "leg_2_len": FloatProperty(
+            name="Leg 2 Length",
+            description="Length of leg",
+            default=2,
+            min=0.5,
+            soft_min=0.5,
+            step=50,
+            precision=1,
+            update=lambda self, context: _clamp_scene_float(
+                self, context, 'leg_2_len', 0.5)),
+        "angle": FloatProperty(
+            name="Base Angle",
+            description="Angle between leg 1 and leg 2",
+            default=90,
+            min=1,
+            max=179,
+            soft_min=1,
+            soft_max=179,
+            step=500,
+            precision=0,
+            update=lambda self, context: _clamp_scene_float(
+                self, context, 'angle', 1, 179)),
         # rather than creating this in the the MT_Tile_Generator class and copying it we set it seperately here
         # and in the tile_props to allow us to have different update functions
         "tile_type": EnumProperty(
