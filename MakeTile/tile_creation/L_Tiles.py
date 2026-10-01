@@ -1,8 +1,8 @@
 import os
-from math import radians
+from math import radians, cos, sin
 import bpy
 import bmesh
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 from bpy.types import Panel, Operator
 from bpy.props import (
     EnumProperty,
@@ -392,11 +392,12 @@ def spawn_openlock_wall_cores(self, tile_props, base):
     if dimensions['triangles_2']['b_adj'] >= 1 or dimensions['triangles_2']['d_adj'] >= 1:
         top_pegs = spawn_openlock_top_pegs(
             core,
+            dimensions,
             tile_props)
 
-        for pegs in top_pegs:
-            set_bool_obj_props(pegs, base, tile_props, 'UNION')
-            set_bool_props(pegs, core, 'UNION')
+        for peg in top_pegs:
+            set_bool_obj_props(peg, base, tile_props, 'UNION')
+            set_bool_props(peg, core, 'UNION')
 
     for cutter in cutters:
         set_bool_obj_props(cutter, base, tile_props, 'DIFFERENCE')
@@ -421,144 +422,106 @@ def spawn_openlock_wall_cores(self, tile_props, base):
     return core
 
 
-def spawn_openlock_top_pegs(core, tile_props):
-    """Spawn top peg(s) for stacking wall tiles and position it.
+def spawn_openlock_top_pegs(core, dimensions, tile_props):
+    """Spawn top peg(s) for stacking wall tiles and position them.
 
     Args:
         core (bpy.types.Object): tile core
+        dimensions (dict): corner wall dimensions from spawn_wall_core
         tile_props (MakeTile.properties.MT_Tile_Properties): tile properties
 
     Returns:
-        bpy.types.Object: top peg(s)
+        list[bpy.types.Object]: top peg(s)
     """
     tile_size = tile_props.tile_size
     base_size = tile_props.base_size
-    leg_1_len = tile_props.leg_1_len
-    leg_2_len = tile_props.leg_2_len
-    cursor = bpy.context.scene.cursor
-    peg = load_openlock_top_peg(tile_props)
+    tile_name = tile_props.tile_name
+
+    source_peg = load_openlock_top_peg(tile_props)
+
+    if tile_props.wall_position == 'CENTER':
+        cross_offset = (base_size[1] / 2) + 0.08
+    else:
+        cross_offset = 0.33
 
     pegs = []
+    triangles = dimensions['triangles_2']
 
-    if leg_1_len >= 1:
-        peg_mesh = peg.data.copy()
-        peg_1 = bpy.data.objects.new("Leg 1 Peg", peg_mesh)
-        add_object_to_collection(peg_1, tile_props.tile_name)
-        bm = bmesh.new()
-        bm.from_mesh(peg_mesh)
-        if leg_1_len >= 2:
-            bm = bmesh_array(
-                source_obj=peg_1,
-                source_bm=bm,
-                count=1,
-                use_relative_offset=False,
-                use_constant_offset=True,
-                constant_offset_displace=(0.505, 0, 0),
-                use_merge_vertices=False,
-                fit_type='FIXED_COUNT')
+    leg_defs = [
+        {
+            'name': 'Leg 1 Peg.' + tile_name,
+            'inner': triangles['b_adj'],
+            'outer': triangles['a_adj'],
+            'leg_dir': Vector((
+                cos(radians(tile_props.angle - 90) * -1),
+                sin(radians(tile_props.angle - 90) * -1),
+                0.0)),
+            'cross_dir': Vector((
+                -sin(radians(tile_props.angle - 90) * -1),
+                cos(radians(tile_props.angle - 90) * -1),
+                0.0)),
+            'rotation': radians(tile_props.angle - 90) * -1,
+        },
+        {
+            'name': 'Leg 2 Peg.' + tile_name,
+            'inner': triangles['d_adj'],
+            'outer': triangles['c_adj'],
+            'leg_dir': Vector((0.0, 1.0, 0.0)),
+            'cross_dir': Vector((1.0, 0.0, 0.0)),
+            'rotation': radians(90),
+        }]
 
-        if leg_1_len >= 4:
-            bm = bmesh_array(
-                source_obj=peg_1,
-                source_bm=bm,
-                use_relative_offset=False,
-                use_constant_offset=True,
-                constant_offset_displace=(2.017, 0, 0),
-                use_merge_vertices=False,
-                fit_type='FIT_LENGTH',
-                fit_length=leg_1_len - 1.3)
+    for leg in leg_defs:
+        inner_len = leg['inner']
+        if inner_len < 1.0:
+            continue
 
-        if tile_props.wall_position == 'CENTER':
-            bmesh.ops.translate(
-                bm,
-                verts=bm.verts,
-                vec=(
-                    0.756,
-                    (base_size[1] / 2) + 0.08,
-                    tile_size[2]),
-                space=peg_1.matrix_world)
-        elif tile_props.wall_position in ['SIDE', 'EXTERIOR']:
-            bmesh.ops.translate(
-                bm,
-                verts=bm.verts,
-                vec=(
-                    0.756,
-                    0.33,
-                    tile_size[2]),
-                space=peg_1.matrix_world)
+        chamfer = leg['outer'] - inner_len
+        # Keep the standard OpenLOCK grid origin when the chamfer allows it,
+        # otherwise push the first peg pair far enough past the chamfer that
+        # the inner edge of the pair is clear of the triangular corner.
+        start_center = max(0.756, chamfer + 0.252 + 0.05)
+        if start_center + 0.252 > inner_len:
+            continue
 
-        bmesh.ops.rotate(
-            bm,
-            cent=cursor.location,
-            verts=bm.verts,
-            matrix=Matrix.Rotation(
-                radians(tile_props.angle - 90) * -1, 3, 'Z'),
-            space=peg_1.matrix_world)
-        bm.to_mesh(peg_mesh)
-        bm.free()
-        pegs.append(peg_1)
+        peg = bpy.data.objects.new(leg['name'], source_peg.data.copy())
+        add_object_to_collection(peg, tile_name)
 
-    # leg 2
-    if leg_2_len >= 1:
-        peg_mesh = peg.data.copy()
-        peg_2 = bpy.data.objects.new("Leg 2 Peg", peg_mesh)
-        add_object_to_collection(peg_2, tile_props.tile_name)
-        bm = bmesh.new()
-        bm.from_mesh(peg_mesh)
+        # Pair array: two pegs 0.505 units apart along the leg.
+        array_mod = peg.modifiers.new('Array', 'ARRAY')
+        array_mod.use_relative_offset = False
+        array_mod.use_constant_offset = True
+        array_mod.constant_offset_displace[0] = 0.505
+        array_mod.fit_type = 'FIXED_COUNT'
+        array_mod.count = 2
 
-        if leg_2_len >= 2:
-            bm = bmesh_array(
-                source_obj=peg_2,
-                source_bm=bm,
-                count=1,
-                use_relative_offset=False,
-                use_constant_offset=True,
-                constant_offset_displace=(0.505, 0, 0),
-                use_merge_vertices=False,
-                fit_type='FIXED_LENGTH')
+        # Place the peg object so the first peg of the pair sits at
+        # start_center along the leg centerline and is offset across the wall
+        # by cross_offset.
+        peg.rotation_euler = (0.0, 0.0, leg['rotation'])
+        peg.location = (
+            leg['leg_dir'] * start_center
+            + leg['cross_dir'] * cross_offset
+            + Vector((0.0, 0.0, tile_size[2])))
 
-        if leg_2_len >= 4:
-            bm = bmesh_array(
-                source_obj=peg_2,
-                source_bm=bm,
-                use_relative_offset=False,
-                use_constant_offset=True,
-                constant_offset_displace=(2.017, 0, 0),
-                fit_type='FIT_LENGTH',
-                fit_length=leg_2_len - 1.3,
-                use_merge_vertices=False)
+        # Row array for longer legs: repeat the pair down the leg using the
+        # OpenLOCK pitch. The array covers from start_center up to the usable
+        # top length, leaving the same end margin as straight walls.
+        fit_length = inner_len - 1.3
+        max_fit_length = inner_len - start_center - 0.757
+        if max_fit_length < fit_length:
+            fit_length = max_fit_length
+        if fit_length >= 2.017:
+            array_mod = peg.modifiers.new('Array', 'ARRAY')
+            array_mod.use_relative_offset = False
+            array_mod.use_constant_offset = True
+            array_mod.constant_offset_displace[0] = 2.017
+            array_mod.fit_type = 'FIT_LENGTH'
+            array_mod.fit_length = fit_length
 
-        bmesh.ops.rotate(
-            bm,
-            cent=cursor.location,
-            verts=bm.verts,
-            matrix=Matrix.Rotation(radians(-90), 3, 'Z'),
-            space=peg_2.matrix_world)
+        pegs.append(peg)
 
-        if tile_props.wall_position == 'CENTER':
-            bmesh.ops.translate(
-                bm,
-                verts=bm.verts,
-                vec=(
-                    (base_size[1] / 2) + 0.08,
-                    (base_size[1] / 2) + leg_2_len - 1,
-                    tile_size[2]),
-                space=peg_2.matrix_world)
-
-        elif tile_props.wall_position in ['SIDE', 'EXTERIOR']:
-            bmesh.ops.translate(
-                bm,
-                verts=bm.verts,
-                vec=(
-                    0.33,
-                    0.25 + leg_2_len - 1,
-                    tile_size[2]),
-                space=peg_2.matrix_world)
-        bm.to_mesh(peg_mesh)
-        bm.free()
-        pegs.append(peg_2)
-
-        bpy.data.objects.remove(peg)
+    bpy.data.objects.remove(source_peg)
     return pegs
 
 

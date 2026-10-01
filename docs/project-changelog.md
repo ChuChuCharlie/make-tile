@@ -6,6 +6,21 @@ All notable changes to MakeTile are documented in this file.
 
 ### Fixed
 
+- **Issue #28** — Fixed L-Wall and U-Wall top peg placement so pegs no longer sit on top of the inner corner chamfer when legs are elongated and no longer overhang U-Wall sides longer than 5.
+  - [`MakeTile/tile_creation/L_Tiles.py`](../../MakeTile/tile_creation/L_Tiles.py): `spawn_openlock_wall_cores` now passes the corner wall `dimensions` returned by `spawn_wall_core` into `spawn_openlock_top_pegs`.
+  - Each L-Wall leg computes its inner-corner chamfer length (`outer_len - inner_len`) and uses it to push the first peg pair outward when the standard `0.756` grid origin would fall inside the chamfer.
+  - L-Wall pegs are now arrayed from the inner corner outward using the same OpenLOCK pitch (`0.505` pair spacing, `2.017` row spacing) as straight walls.
+  - [`MakeTile/tile_creation/U_Tiles.py`](../../MakeTile/tile_creation/U_Tiles.py): `spawn_openlock_top_pegs` now treats the end wall and both legs as independent straight segments.
+  - U-Wall pegs are positioned from the inner corner of each segment outward, fixing the coordinate bug that used `core.location[0]` for leg Y placement and the overhang caused by using outer leg length for row-array length.
+  - Each segment's inner top length is derived from the actual core geometry (`tile_size[0] + thickness_diff` for the end wall, `leg_len + thickness_diff/2` for the legs), and the cross-offset is set to `(thickness/2) - 0.08` so pegs land on the wall centreline for default thicknesses.
+  - Added regression test `test_l_wall_top_pegs_clear_corner` in [`tests/test_l_tiles.py`](../../tests/test_l_tiles.py) and `test_u_wall_top_pegs_inside_core` in [`tests/test_u_tiles.py`](../../tests/test_u_tiles.py) that check evaluated peg vertices are contained within the wall core.
+  - Severity: high. Impact: restores correct stacking geometry for long/thick/angled L-Walls and U-Walls.
+
+- **Issue #26** — Fixed `KeyError: 'Color'` crash in [`MakeTile/properties/scene_props.py`](../../MakeTile/properties/scene_props.py) when changing material mapping method to Object, Generated, or UV.
+  - Added a `_safe_link` helper that only creates node links when both the source output and destination input sockets exist.
+  - `update_material_mapping` now guards against a missing active material or node tree and skips linking for mapping types the material does not support.
+  - Severity: high. Impact: prevents crash when switching material mapping on custom image materials that lack a `Color` output on their mapping node.
+
 - **Issue #29** — Fixed `spawn_openlock_base_clip_cutters` in [`MakeTile/tile_creation/Triangular_Tiles.py`](../../MakeTile/tile_creation/Triangular_Tiles.py) so triangular floor tiles no longer raise `TypeError: 'NoneType' object is not iterable` for short legs.
   - The function now always returns a list (empty when no cutters are needed).
   - OpenLOCK clip cutters are only added to Leg 1 / Leg 2 when the leg is at least 2.0; shorter legs leave no room and cause the boolean difference to clip through adjacent geometry.

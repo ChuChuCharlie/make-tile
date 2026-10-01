@@ -271,12 +271,11 @@ def spawn_openlock_wall_cores(base, tile_props):
         set_bool_obj_props(cutter, base, tile_props, 'DIFFERENCE')
         set_bool_props(cutter, core, 'DIFFERENCE')
 
-    if tile_props.tile_size[0] >= 1:
-        pegs = spawn_openlock_top_pegs(core, tile_props)
+    pegs = spawn_openlock_top_pegs(core, tile_props)
 
-        for peg in pegs:
-            set_bool_obj_props(peg, base, tile_props, 'UNION')
-            set_bool_props(peg, core, 'UNION')
+    for peg in pegs:
+        set_bool_obj_props(peg, base, tile_props, 'UNION')
+        set_bool_props(peg, core, 'UNION')
 
     if tile_props.base_blueprint == 'OPENLOCK_S_WALL' and tile_props.wall_position == 'EXTERIOR':
         args = ['Y Pos Clip']
@@ -392,139 +391,116 @@ def spawn_openlock_wall_cutters(base, tile_props):
 
 # @profile
 def spawn_openlock_top_pegs(core, tile_props):
-    """Spawn top peg(s) for stacking wall tiles and position it.
+    """Spawn OpenLOCK top pegs for a U-shaped wall core.
+
+    Pegs are placed on the three straight wall segments (end wall and two
+    legs) using the actual inner top length of each segment. The first peg
+    pair starts at the standard OpenLOCK distance from the inner corner and
+    arrays outward so long legs do not overhang the corner or adjacent wall.
 
     Args:
         core (bpy.types.Object): tile core
         tile_props (MakeTile.properties.MT_Tile_Properties): tile properties
 
     Returns:
-        bpy.types.Object: top peg(s)
+        list[bpy.types.Object]: top peg(s)
     """
-
     tile_size = tile_props.tile_size
     base_size = tile_props.base_size
-    leg_1_inner_len = tile_props.leg_1_len
-    leg_2_inner_len = tile_props.leg_2_len
-    x_inner_len = tile_props.tile_size[0]
-    thickness = tile_props.base_size[1]
+    tile_name = tile_props.tile_name
 
-    leg_1_outer_len = leg_1_inner_len + thickness
-    leg_2_outer_len = leg_2_inner_len + thickness
-    x_outer_len = x_inner_len + (thickness * 2)
+    thickness = tile_size[1]
+    base_thickness = base_size[1]
+    thickness_diff = base_thickness - thickness
+    inset = thickness_diff / 2
+    # Offset from the inner edge of the segment to the peg centre. The peg
+    # sits on the wall centreline (thickness/2 from the inner edge) plus the
+    # standard 0.08" inward clearance used by straight and L walls.
+    cross_offset = (thickness / 2) - 0.08
 
     source_peg = load_openlock_top_peg(tile_props)
     pegs = []
-    peg_1 = bpy.data.objects.new(
-        'Base Wall Top Peg.' + tile_props.tile_name, source_peg.data.copy())
-    add_object_to_collection(peg_1, tile_props.tile_name)
 
-    array_mod = peg_1.modifiers.new('Array', 'ARRAY')
-    array_mod.use_relative_offset = False
-    array_mod.use_constant_offset = True
-    array_mod.constant_offset_displace[0] = 0.505
-    array_mod.fit_type = 'FIXED_COUNT'
-    array_mod.count = 2
+    # U-wall core is drawn with its inner corners inset by `inset` from the
+    # base origin. Each segment starts at its inner corner and runs outward.
+    inner_corner_1 = Vector((inset + thickness, inset + thickness, 0.0))
+    inner_corner_2 = inner_corner_1 + Vector((tile_size[0] + thickness_diff, 0.0, 0.0))
 
-    core_location = core.location.copy()
+    # The usable straight top length of each segment is the raw property
+    # plus the thickness difference that the core geometry adds.
+    segments = [
+        {
+            'name': 'End Wall Top Peg.' + tile_name,
+            'inner': tile_size[0] + thickness_diff,
+            'start': inner_corner_1,
+            'leg_dir': Vector((1.0, 0.0, 0.0)),
+            'cross_dir': Vector((0.0, -1.0, 0.0)),
+            'rotation': 0.0,
+        },
+        {
+            'name': 'Leg 1 Top Peg.' + tile_name,
+            'inner': tile_props.leg_1_len + inset,
+            'start': inner_corner_1,
+            'leg_dir': Vector((0.0, 1.0, 0.0)),
+            'cross_dir': Vector((-1.0, 0.0, 0.0)),
+            'rotation': radians(90),
+        },
+        {
+            'name': 'Leg 2 Top Peg.' + tile_name,
+            'inner': tile_props.leg_2_len + inset,
+            'start': inner_corner_2,
+            'leg_dir': Vector((0.0, 1.0, 0.0)),
+            'cross_dir': Vector((1.0, 0.0, 0.0)),
+            'rotation': radians(90),
+        }]
 
-    # Back wall
-    if x_outer_len < 4 and x_outer_len >= 1:
-        peg_1.location = (
-            core_location[0] + (x_outer_len / 2) - 0.252,
-            core_location[1] + (base_size[1] / 2) + 0.08,
-            core_location[2] + tile_size[2])
-    else:
-        peg_1.location = (
-            core_location[0] + 0.756 + thickness,
-            core_location[1] + (base_size[1] / 2) + 0.08,
-            core_location[2] + tile_size[2])
-        array_mod = peg_1.modifiers.new('Array', 'ARRAY')
+    for seg in segments:
+        inner_len = seg['inner']
+        if inner_len < 1.0:
+            continue
+
+        # First pair center is kept at the standard OpenLOCK 0.756" grid
+        # distance from the inner corner. The pair half-width is 0.252".
+        start_center = 0.756
+        if start_center + 0.252 > inner_len:
+            continue
+
+        peg = bpy.data.objects.new(seg['name'], source_peg.data.copy())
+        add_object_to_collection(peg, tile_name)
+
+        # Pair array: two pegs 0.505 units apart along the segment.
+        array_mod = peg.modifiers.new('Array', 'ARRAY')
         array_mod.use_relative_offset = False
         array_mod.use_constant_offset = True
-        array_mod.constant_offset_displace[0] = 2.017
-        array_mod.fit_type = 'FIT_LENGTH'
-        array_mod.fit_length = tile_size[0] - 1.3
+        array_mod.constant_offset_displace[0] = 0.505
+        array_mod.fit_type = 'FIXED_COUNT'
+        array_mod.count = 2
 
-    pegs.append(peg_1)
+        peg.rotation_euler = (0.0, 0.0, seg['rotation'])
+        peg.location = (
+            core.location
+            + seg['start']
+            + seg['leg_dir'] * start_center
+            + seg['cross_dir'] * cross_offset
+            + Vector((0.0, 0.0, tile_size[2])))
 
-    # leg 1
-    if leg_1_outer_len >= 1:
-        peg_2 = bpy.data.objects.new(
-            'Leg 1 Top Peg.' + tile_props.tile_name, source_peg.data.copy())
-        add_object_to_collection(peg_2, tile_props.tile_name)
-
-        peg_2.rotation_euler[2] = radians(-90)
-
-        if leg_1_outer_len < 4 and leg_1_outer_len >= 1:
-            peg_2.location = (
-                core_location[0] + (thickness / 2) + 0.08,
-                core_location[1] + (leg_1_outer_len / 2) - 0.252,
-                core_location[2] + tile_size[2])
-        else:
-            peg_2.location = (
-                core_location[0] + (thickness / 2) + 0.08,
-                core_location[0] + 0.756 + thickness,
-                core_location[2] + tile_size[2])
-
-        if leg_1_outer_len >= 2:
-            array_mod = peg_2.modifiers.new('Array', 'ARRAY')
-            array_mod.use_relative_offset = False
-            array_mod.use_constant_offset = True
-            array_mod.constant_offset_displace[0] = -0.505
-            array_mod.constant_offset_displace[1] = 0
-            array_mod.fit_type = 'FIXED_COUNT'
-            array_mod.count = 2
-
-        if leg_1_outer_len >= 4:
-            array_mod = peg_2.modifiers.new('Array', 'ARRAY')
-            array_mod.use_relative_offset = False
-            array_mod.use_constant_offset = True
-            array_mod.constant_offset_displace[0] = -2.017
-            array_mod.constant_offset_displace[1] = 0
-            array_mod.fit_type = 'FIT_LENGTH'
-            array_mod.fit_length = leg_1_outer_len - 1.3
-
-        peg_2.rotation_euler[2] = radians(-90)
-        pegs.append(peg_2)
-
-    # leg 2
-    if leg_2_outer_len >= 1:
-        peg_3 = bpy.data.objects.new(
-            'Leg 2 Top Peg.' + tile_props.tile_name, source_peg.data.copy())
-        add_object_to_collection(peg_3, tile_props.tile_name)
-
-        if leg_2_outer_len < 4 and leg_2_outer_len >= 1:
-            peg_3.location = (
-                core_location[0] + x_outer_len - (thickness / 2) - 0.08,
-                core_location[1] + (leg_2_outer_len / 2) - 0.252,
-                core_location[2] + tile_size[2])
-        else:
-            peg_3.location = (
-                core_location[0] + x_outer_len - (thickness / 2) - 0.08,
-                core_location[0] + 0.756 + thickness,
-                core_location[2] + tile_size[2])
-
-        if leg_2_outer_len >= 2:
-            array_mod = peg_3.modifiers.new('Array', 'ARRAY')
-            array_mod.use_relative_offset = False
-            array_mod.use_constant_offset = True
-            array_mod.constant_offset_displace[0] = 0.505
-            array_mod.constant_offset_displace[1] = 0
-            array_mod.fit_type = 'FIXED_COUNT'
-            array_mod.count = 2
-
-        if leg_2_outer_len >= 4:
-            array_mod = peg_3.modifiers.new('Array', 'ARRAY')
+        # Row array for longer segments: repeat the pair along the segment
+        # using the OpenLOCK pitch. Cap fit_length so the last pair stays
+        # within the usable top length, matching straight-wall end margins.
+        fit_length = inner_len - 1.3
+        max_fit_length = inner_len - start_center - 0.757
+        if max_fit_length < fit_length:
+            fit_length = max_fit_length
+        if fit_length >= 2.017:
+            array_mod = peg.modifiers.new('Array', 'ARRAY')
             array_mod.use_relative_offset = False
             array_mod.use_constant_offset = True
             array_mod.constant_offset_displace[0] = 2.017
-            array_mod.constant_offset_displace[1] = 0
             array_mod.fit_type = 'FIT_LENGTH'
-            array_mod.fit_length = leg_2_outer_len - 1.3
+            array_mod.fit_length = fit_length
 
-        peg_3.rotation_euler[2] = radians(90)
-        pegs.append(peg_3)
+        pegs.append(peg)
+
     bpy.data.objects.remove(source_peg)
     return pegs
 

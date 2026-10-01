@@ -42,9 +42,27 @@ def update_disp_subdivisions(self, context):
             pass
 
 
+def _safe_link(tree, from_node, from_socket, to_node, to_socket):
+    """Create a node link only if both sockets exist.
+
+    Args:
+        tree (bpy.types.NodeTree): material node tree
+        from_node (bpy.types.Node): source node
+        from_socket (str): source output identifier
+        to_node (bpy.types.Node): destination node
+        to_socket (str): destination input identifier
+    """
+    out_sock = from_node.outputs.get(from_socket)
+    in_sock = to_node.inputs.get(to_socket)
+    if out_sock is not None and in_sock is not None:
+        tree.links.new(out_sock, in_sock)
+
+
 def update_material_mapping(self, context):
     '''updates which mapping method to use for a material'''
     material = context.object.active_material
+    if material is None or material.node_tree is None:
+        return
     tree = material.node_tree
     nodes = tree.nodes
 
@@ -54,29 +72,19 @@ def update_material_mapping(self, context):
         mapping_node = nodes['master_mapping']
         if map_meth == 'WRAP_AROUND':
             map_type_node = nodes['wrap_around_map']
-            tree.links.new(
-                map_type_node.outputs['Vector'],
-                mapping_node.inputs['Vector'])
+            _safe_link(tree, map_type_node, 'Vector', mapping_node, 'Vector')
         elif map_meth == 'TRIPLANAR':
             map_type_node = nodes['triplanar_map']
-            tree.links.new(
-                map_type_node.outputs['Vector'],
-                mapping_node.inputs['Vector'])
+            _safe_link(tree, map_type_node, 'Vector', mapping_node, 'Vector')
         elif map_meth == 'OBJECT':
             map_type_node = nodes['object_map']
-            tree.links.new(
-                map_type_node.outputs['Color'],
-                mapping_node.inputs['Vector'])
+            _safe_link(tree, map_type_node, 'Color', mapping_node, 'Vector')
         elif map_meth == 'GENERATED':
             map_type_node = nodes['generated_map']
-            tree.links.new(
-                map_type_node.outputs['Color'],
-                mapping_node.inputs['Vector'])
+            _safe_link(tree, map_type_node, 'Color', mapping_node, 'Vector')
         elif map_meth == 'UV':
             map_type_node = nodes['UV_map']
-            tree.links.new(
-                map_type_node.outputs['Color'],
-                mapping_node.inputs['Vector'])
+            _safe_link(tree, map_type_node, 'Color', mapping_node, 'Vector')
 
 
 def _clamp_scene_float(self, context, prop_name, min_val=None, max_val=None):
